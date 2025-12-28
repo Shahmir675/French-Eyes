@@ -1,3 +1,14 @@
 .claude/
 CLAUDE.md
 docs/
+
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+coverage/
+.nyc_output/
+
+firebase-service-account.json
+*-service-account.json
