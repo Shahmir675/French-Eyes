@@ -11,6 +11,8 @@ import loyaltyRoutes from "./loyalty.routes.js";
 import bonusRoutes from "./bonus.routes.js";
 import supportRoutes from "./support.routes.js";
 import driverRoutes from "./driver.routes.js";
+import adminRoutes from "./admin.routes.js";
+import deviceRoutes from "./device.routes.js";
 
 const router = Router();
 
@@ -26,5 +28,7 @@ router.use("/loyalty", loyaltyRoutes);
 router.use("/bonuses", bonusRoutes);
 router.use("/support", supportRoutes);
 router.use("/driver", driverRoutes);
+router.use("/admin", adminRoutes);
+router.use("/devices", deviceRoutes);
 
 export default router;

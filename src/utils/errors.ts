@@ -50,6 +50,17 @@ export const ErrorCodes = {
   DRIVER_INACTIVE: "DRIVER_INACTIVE",
   ORDER_NOT_AVAILABLE: "ORDER_NOT_AVAILABLE",
   INVALID_STATUS_TRANSITION: "INVALID_STATUS_TRANSITION",
+  ADMIN_NOT_FOUND: "ADMIN_NOT_FOUND",
+  ADMIN_INACTIVE: "ADMIN_INACTIVE",
+  ADMIN_EXISTS: "ADMIN_EXISTS",
+  INSUFFICIENT_PERMISSIONS: "INSUFFICIENT_PERMISSIONS",
+  SETTINGS_NOT_FOUND: "SETTINGS_NOT_FOUND",
+  GDPR_REQUEST_NOT_FOUND: "GDPR_REQUEST_NOT_FOUND",
+  REVIEW_NOT_FOUND: "REVIEW_NOT_FOUND",
+  DEVICE_NOT_FOUND: "DEVICE_NOT_FOUND",
+  DEVICE_INACTIVE: "DEVICE_INACTIVE",
+  DEVICE_TOKEN_INVALID: "DEVICE_TOKEN_INVALID",
+  DEVICE_EXISTS: "DEVICE_EXISTS",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
@@ -358,6 +369,74 @@ export class AppError extends Error {
       ErrorCodes.INVALID_STATUS_TRANSITION,
       "Invalid status transition for this order",
       400
+    );
+  }
+
+  static adminNotFound(): AppError {
+    return new AppError(ErrorCodes.ADMIN_NOT_FOUND, "Admin not found", 404);
+  }
+
+  static adminInactive(): AppError {
+    return new AppError(
+      ErrorCodes.ADMIN_INACTIVE,
+      "Admin account is inactive",
+      403
+    );
+  }
+
+  static adminExists(): AppError {
+    return new AppError(
+      ErrorCodes.ADMIN_EXISTS,
+      "Admin with this email already exists",
+      409
+    );
+  }
+
+  static insufficientPermissions(): AppError {
+    return new AppError(
+      ErrorCodes.INSUFFICIENT_PERMISSIONS,
+      "Insufficient permissions for this action",
+      403
+    );
+  }
+
+  static settingsNotFound(): AppError {
+    return new AppError(ErrorCodes.SETTINGS_NOT_FOUND, "Settings not found", 404);
+  }
+
+  static gdprRequestNotFound(): AppError {
+    return new AppError(ErrorCodes.GDPR_REQUEST_NOT_FOUND, "GDPR request not found", 404);
+  }
+
+  static reviewNotFound(): AppError {
+    return new AppError(ErrorCodes.REVIEW_NOT_FOUND, "Review not found", 404);
+  }
+
+  static deviceNotFound(): AppError {
+    return new AppError(ErrorCodes.DEVICE_NOT_FOUND, "Device not found", 404);
+  }
+
+  static deviceInactive(): AppError {
+    return new AppError(
+      ErrorCodes.DEVICE_INACTIVE,
+      "Device is inactive",
+      403
+    );
+  }
+
+  static deviceTokenInvalid(): AppError {
+    return new AppError(
+      ErrorCodes.DEVICE_TOKEN_INVALID,
+      "Invalid device token",
+      401
+    );
+  }
+
+  static deviceExists(): AppError {
+    return new AppError(
+      ErrorCodes.DEVICE_EXISTS,
+      "Device with this name already exists",
+      409
     );
   }
 }

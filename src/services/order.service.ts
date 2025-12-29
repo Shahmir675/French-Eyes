@@ -431,6 +431,7 @@ export class OrderService {
 
     order.review = {
       rating: input.rating,
+      visible: true,
       createdAt: new Date(),
     };
 

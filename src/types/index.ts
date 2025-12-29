@@ -218,6 +218,10 @@ export interface StatusHistoryEntry {
 export interface IOrderReview {
   rating: number;
   comment?: string;
+  response?: string;
+  respondedAt?: Date;
+  respondedBy?: Types.ObjectId;
+  visible: boolean;
   createdAt: Date;
 }
 
@@ -422,5 +426,131 @@ export interface AuthenticatedDriverRequest extends Request {
   driver?: {
     driverId: string;
     email: string;
+  };
+}
+
+export type AdminRole = "super_admin" | "admin" | "manager";
+export type AdminStatus = "active" | "inactive";
+
+export interface IAdmin extends Document {
+  _id: Types.ObjectId;
+  email: string;
+  passwordHash: string;
+  name: string;
+  role: AdminRole;
+  status: AdminStatus;
+  permissions: string[];
+  lastLoginAt?: Date;
+  passwordResetToken?: string;
+  passwordResetExpires?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IAdminSession extends Document {
+  _id: Types.ObjectId;
+  adminId: Types.ObjectId;
+  refreshToken: string;
+  expiresAt: Date;
+  userAgent?: string;
+  createdAt: Date;
+}
+
+export interface AdminTokenPayload {
+  adminId: string;
+  email: string;
+  role: AdminRole;
+  type: "access" | "refresh";
+}
+
+export interface AuthenticatedAdminRequest extends Request {
+  admin?: {
+    adminId: string;
+    email: string;
+    role: AdminRole;
+  };
+}
+
+export interface ISettings extends Document {
+  _id: Types.ObjectId;
+  key: string;
+  value: Record<string, unknown>;
+  updatedAt: Date;
+  updatedBy?: Types.ObjectId;
+}
+
+export interface IGDPRRequest extends Document {
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
+  type: "export" | "deletion";
+  status: "pending" | "processing" | "completed" | "failed";
+  processedBy?: Types.ObjectId;
+  processedAt?: Date;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IReview {
+  orderId: Types.ObjectId;
+  userId: Types.ObjectId;
+  rating: number;
+  comment?: string;
+  response?: string;
+  respondedAt?: Date;
+  respondedBy?: Types.ObjectId;
+  visible: boolean;
+  createdAt: Date;
+}
+
+export type DeviceType = "thermal_printer" | "pos_terminal" | "display";
+export type DeviceStatus = "active" | "inactive" | "offline";
+
+export interface IDevice extends Document {
+  _id: Types.ObjectId;
+  name: string;
+  type: DeviceType;
+  simNumber?: string;
+  audioEnabled: boolean;
+  token: string;
+  status: DeviceStatus;
+  lastSeenAt?: Date;
+  settings: Record<string, unknown>;
+  createdBy: Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AuthenticatedDeviceRequest extends Request {
+  device?: {
+    deviceId: string;
+    name: string;
+    type: DeviceType;
+  };
+}
+
+export interface DeviceTokenPayload {
+  deviceId: string;
+  type: DeviceType;
+}
+
+export interface OrderPrintPayload {
+  event: "new_order" | "order_update" | "order_cancelled";
+  order: {
+    id: string;
+    orderNumber: string;
+    customer: { name: string; phone: string };
+    type: OrderType;
+    items: Array<{
+      name: string;
+      quantity: number;
+      options: string[];
+      extras: string[];
+      notes?: string;
+    }>;
+    notes?: string;
+    bonus?: { name: string };
+    total: number;
+    createdAt: string;
   };
 }

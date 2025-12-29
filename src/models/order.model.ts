@@ -126,6 +126,21 @@ const reviewSchema = new Schema(
       type: String,
       trim: true,
     },
+    response: {
+      type: String,
+      trim: true,
+    },
+    respondedAt: {
+      type: Date,
+    },
+    respondedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+    },
+    visible: {
+      type: Boolean,
+      default: true,
+    },
     createdAt: {
       type: Date,
       required: true,
