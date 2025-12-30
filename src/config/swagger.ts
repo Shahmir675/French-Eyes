@@ -29,6 +29,9 @@ export const swaggerDocument = {
     { name: "Bonuses", description: "Active bonuses and promotions" },
     { name: "Support", description: "Customer support tickets" },
     { name: "Driver", description: "Driver operations" },
+    { name: "Admin", description: "Admin management endpoints" },
+    { name: "Devices", description: "POS/Printer device management" },
+    { name: "WebSocket", description: "Real-time WebSocket endpoints" },
   ],
   components: {
     securitySchemes: {
@@ -558,6 +561,111 @@ export const swaggerDocument = {
         properties: {
           status: { type: "string", enum: ["picked_up", "out_for_delivery", "delivered"] },
           notes: { type: "string", maxLength: 500 },
+        },
+      },
+      Device: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          type: { type: "string", enum: ["thermal_printer", "pos_terminal", "display"] },
+          simNumber: { type: "string" },
+          audioEnabled: { type: "boolean" },
+          token: { type: "string" },
+          status: { type: "string", enum: ["active", "inactive", "offline"] },
+          lastSeenAt: { type: "string", format: "date-time" },
+          createdAt: { type: "string", format: "date-time" },
+        },
+      },
+      RegisterDeviceRequest: {
+        type: "object",
+        required: ["name", "type"],
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 100 },
+          type: { type: "string", enum: ["thermal_printer", "pos_terminal", "display"] },
+          simNumber: { type: "string", maxLength: 50 },
+          audioEnabled: { type: "boolean", default: true },
+        },
+      },
+      UpdateDeviceSettingsRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 100 },
+          audioEnabled: { type: "boolean" },
+          settings: { type: "object" },
+        },
+      },
+      WebSocketOrderTrackingEvent: {
+        type: "object",
+        properties: {
+          event: { type: "string", enum: ["status_update", "driver_location", "prep_time_update"] },
+          data: {
+            type: "object",
+            properties: {
+              orderId: { type: "string" },
+              status: { type: "string" },
+              prepTime: { type: "integer" },
+              driverLocation: {
+                type: "object",
+                properties: { lat: { type: "number" }, lng: { type: "number" } },
+              },
+              estimatedDelivery: { type: "string", format: "date-time" },
+            },
+          },
+        },
+      },
+      WebSocketAdminOrderEvent: {
+        type: "object",
+        properties: {
+          event: { type: "string", enum: ["new_order", "order_update", "order_cancelled", "driver_assigned"] },
+          data: {
+            type: "object",
+            properties: {
+              orderId: { type: "string" },
+              orderNumber: { type: "string" },
+              status: { type: "string" },
+              type: { type: "string", enum: ["delivery", "pickup"] },
+              total: { type: "number" },
+              customerName: { type: "string" },
+              driverId: { type: "string" },
+              driverName: { type: "string" },
+            },
+          },
+        },
+      },
+      WebSocketDriverOrderEvent: {
+        type: "object",
+        properties: {
+          event: { type: "string", enum: ["order_assigned", "order_cancelled", "order_reassigned"] },
+          data: {
+            type: "object",
+            properties: {
+              orderId: { type: "string" },
+              orderNumber: { type: "string" },
+              customerName: { type: "string" },
+              customerPhone: { type: "string" },
+              address: { $ref: "#/components/schemas/Address" },
+              total: { type: "number" },
+              tip: { type: "number" },
+            },
+          },
+        },
+      },
+      WebSocketSupportChatEvent: {
+        type: "object",
+        properties: {
+          event: { type: "string", enum: ["message", "typing", "read"] },
+          data: {
+            type: "object",
+            properties: {
+              ticketId: { type: "string" },
+              messageId: { type: "string" },
+              sender: { type: "string", enum: ["user", "support"] },
+              senderId: { type: "string" },
+              message: { type: "string" },
+              timestamp: { type: "string", format: "date-time" },
+            },
+          },
         },
       },
     },
@@ -1705,6 +1813,219 @@ export const swaggerDocument = {
         },
         responses: {
           "201": { description: "Ticket created" },
+        },
+      },
+    },
+    "/api/v1/devices/register": {
+      post: {
+        tags: ["Devices"],
+        summary: "Register new POS/Printer device",
+        security: [{ bearerAuth: [] }],
+        description: "Requires Admin authentication",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/RegisterDeviceRequest" },
+            },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Device registered",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Device" } } },
+          },
+          "409": { description: "Device name already exists" },
+        },
+      },
+    },
+    "/api/v1/devices": {
+      get: {
+        tags: ["Devices"],
+        summary: "List all registered devices",
+        security: [{ bearerAuth: [] }],
+        description: "Requires Admin authentication",
+        responses: {
+          "200": {
+            description: "List of devices",
+            content: {
+              "application/json": {
+                schema: { type: "array", items: { $ref: "#/components/schemas/Device" } },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/devices/{id}": {
+      get: {
+        tags: ["Devices"],
+        summary: "Get device by ID",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Device details" },
+          "404": { description: "Device not found" },
+        },
+      },
+      delete: {
+        tags: ["Devices"],
+        summary: "Unregister device",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Device unregistered" },
+          "404": { description: "Device not found" },
+        },
+      },
+    },
+    "/api/v1/devices/{id}/settings": {
+      patch: {
+        tags: ["Devices"],
+        summary: "Update device settings",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/UpdateDeviceSettingsRequest" },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Settings updated" },
+        },
+      },
+    },
+    "/api/v1/devices/{id}/test": {
+      post: {
+        tags: ["Devices"],
+        summary: "Send test print to device",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Test print sent" },
+        },
+      },
+    },
+    "/api/v1/devices/{id}/regenerate-token": {
+      post: {
+        tags: ["Devices"],
+        summary: "Regenerate device token",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Token regenerated" },
+        },
+      },
+    },
+    "/api/v1/devices/{id}/status": {
+      patch: {
+        tags: ["Devices"],
+        summary: "Update device status",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["status"],
+                properties: {
+                  status: { type: "string", enum: ["active", "inactive"] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Status updated" },
+        },
+      },
+    },
+    "/api/v1/devices/connected/list": {
+      get: {
+        tags: ["Devices"],
+        summary: "Get list of currently connected devices",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          "200": { description: "Connected devices" },
+        },
+      },
+    },
+    "/ws/orders/{orderId}/track": {
+      get: {
+        tags: ["WebSocket"],
+        summary: "Customer Order Tracking (WebSocket)",
+        description: "WebSocket endpoint for real-time order tracking. Connect with `?token=<user_jwt>`. Receives: status_update, driver_location, prep_time_update events.",
+        parameters: [
+          { name: "orderId", in: "path", required: true, schema: { type: "string" } },
+          { name: "token", in: "query", required: true, schema: { type: "string" }, description: "User JWT access token" },
+        ],
+        responses: {
+          "101": { description: "Switching Protocols - WebSocket connection established" },
+          "401": { description: "Unauthorized - Invalid or missing token" },
+        },
+      },
+    },
+    "/ws/admin/orders": {
+      get: {
+        tags: ["WebSocket"],
+        summary: "Admin Live Order Dashboard (WebSocket)",
+        description: "WebSocket endpoint for admin real-time order updates. Connect with `?token=<admin_jwt>`. Receives: new_order, order_update, order_cancelled, driver_assigned events.",
+        parameters: [
+          { name: "token", in: "query", required: true, schema: { type: "string" }, description: "Admin JWT access token" },
+        ],
+        responses: {
+          "101": { description: "WebSocket connection established" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/ws/driver/orders": {
+      get: {
+        tags: ["WebSocket"],
+        summary: "Driver Order Notifications (WebSocket)",
+        description: "WebSocket endpoint for driver order notifications. Connect with `?token=<driver_jwt>`. Receives: order_assigned, order_cancelled, order_reassigned events.",
+        parameters: [
+          { name: "token", in: "query", required: true, schema: { type: "string" }, description: "Driver JWT access token" },
+        ],
+        responses: {
+          "101": { description: "WebSocket connection established" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/ws/devices/{deviceId}/stream": {
+      get: {
+        tags: ["WebSocket"],
+        summary: "POS/Printer Order Stream (WebSocket)",
+        description: "WebSocket endpoint for POS devices to receive orders. Connect with `?token=<device_token>`. Receives: new_order, order_update, order_cancelled events with full order details for printing.",
+        parameters: [
+          { name: "deviceId", in: "path", required: true, schema: { type: "string" } },
+          { name: "token", in: "query", required: true, schema: { type: "string" }, description: "Device token (96-char hex)" },
+        ],
+        responses: {
+          "101": { description: "WebSocket connection established" },
+          "401": { description: "Invalid device token" },
+          "403": { description: "Token/device ID mismatch" },
+        },
+      },
+    },
+    "/ws/support/chat/{ticketId}": {
+      get: {
+        tags: ["WebSocket"],
+        summary: "Support Live Chat (WebSocket)",
+        description: "WebSocket endpoint for live support chat. Connect with `?token=<user_or_admin_jwt>`. Bidirectional: Send and receive message, typing, read events.",
+        parameters: [
+          { name: "ticketId", in: "path", required: true, schema: { type: "string" } },
+          { name: "token", in: "query", required: true, schema: { type: "string" }, description: "User or Admin JWT" },
+        ],
+        responses: {
+          "101": { description: "WebSocket connection established" },
+          "401": { description: "Unauthorized" },
         },
       },
     },

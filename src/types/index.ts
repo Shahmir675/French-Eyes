@@ -554,3 +554,58 @@ export interface OrderPrintPayload {
     createdAt: string;
   };
 }
+
+export interface CustomerOrderTrackingEvent {
+  event: "status_update" | "driver_location" | "prep_time_update";
+  data: {
+    orderId: string;
+    status?: OrderStatus;
+    prepTime?: number;
+    driverLocation?: { lat: number; lng: number };
+    estimatedDelivery?: string;
+  };
+}
+
+export interface AdminOrderEvent {
+  event: "new_order" | "order_update" | "order_cancelled" | "driver_assigned";
+  data: {
+    orderId: string;
+    orderNumber: string;
+    status: OrderStatus;
+    type: OrderType;
+    total: number;
+    customerName: string;
+    driverId?: string;
+    driverName?: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
+export interface DriverOrderEvent {
+  event: "order_assigned" | "order_cancelled" | "order_reassigned";
+  data: {
+    orderId: string;
+    orderNumber: string;
+    customerName: string;
+    customerPhone: string;
+    address?: OrderAddress;
+    total: number;
+    tip: number;
+    notes?: string;
+  };
+}
+
+export interface SupportChatEvent {
+  event: "message" | "typing" | "read";
+  data: {
+    ticketId: string;
+    messageId?: string;
+    sender: MessageSender;
+    senderId: string;
+    message?: string;
+    timestamp: string;
+  };
+}
+
+export type WSClientType = "customer" | "admin" | "driver" | "device" | "support";
