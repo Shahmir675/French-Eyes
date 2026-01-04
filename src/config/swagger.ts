@@ -31,6 +31,7 @@ export const swaggerDocument = {
     { name: "Driver", description: "Driver operations" },
     { name: "Admin", description: "Admin management endpoints" },
     { name: "Devices", description: "POS/Printer device management" },
+    { name: "Upload", description: "File upload and S3 media storage" },
     { name: "WebSocket", description: "Real-time WebSocket endpoints" },
   ],
   components: {
@@ -666,6 +667,48 @@ export const swaggerDocument = {
               timestamp: { type: "string", format: "date-time" },
             },
           },
+        },
+      },
+      UploadResponse: {
+        type: "object",
+        properties: {
+          success: { type: "boolean", example: true },
+          data: {
+            type: "object",
+            properties: {
+              url: { type: "string", example: "https://frencheyes-media.s3.eu-central-1.amazonaws.com/products/123/image.jpg" },
+              key: { type: "string", example: "products/123/1234567890-abc123-image.jpg" },
+            },
+          },
+        },
+      },
+      PresignedUploadResponse: {
+        type: "object",
+        properties: {
+          success: { type: "boolean", example: true },
+          data: {
+            type: "object",
+            properties: {
+              uploadUrl: { type: "string", description: "Presigned URL for direct upload to S3" },
+              key: { type: "string", description: "S3 object key" },
+              publicUrl: { type: "string", description: "Public URL after upload completes" },
+            },
+          },
+        },
+      },
+      PresignedUploadRequest: {
+        type: "object",
+        required: ["filename", "mimeType"],
+        properties: {
+          filename: { type: "string", example: "product-image.jpg" },
+          mimeType: { type: "string", enum: ["image/jpeg", "image/png", "image/webp", "image/gif"], example: "image/jpeg" },
+        },
+      },
+      DeleteImageRequest: {
+        type: "object",
+        required: ["url"],
+        properties: {
+          url: { type: "string", example: "https://frencheyes-media.s3.eu-central-1.amazonaws.com/products/123/image.jpg" },
         },
       },
     },
@@ -1952,6 +1995,168 @@ export const swaggerDocument = {
         security: [{ bearerAuth: [] }],
         responses: {
           "200": { description: "Connected devices" },
+        },
+      },
+    },
+    "/api/v1/admin/products/{id}/images": {
+      post: {
+        tags: ["Upload", "Admin"],
+        summary: "Upload product image",
+        description: "Upload an image for a product. Image is stored in AWS S3. Max size: 10MB. Allowed types: JPEG, PNG, WebP, GIF.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "Product ID" }],
+        requestBody: {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: {
+                type: "object",
+                required: ["image"],
+                properties: {
+                  image: { type: "string", format: "binary", description: "Image file (max 10MB)" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Image uploaded successfully",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/UploadResponse" } } },
+          },
+          "400": { description: "Invalid file type or size" },
+          "404": { description: "Product not found" },
+        },
+      },
+    },
+    "/api/v1/admin/products/{id}/images/{imageId}": {
+      delete: {
+        tags: ["Upload", "Admin"],
+        summary: "Delete product image",
+        description: "Delete a product image from S3",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" }, description: "Product ID" },
+          { name: "imageId", in: "path", required: true, schema: { type: "string" }, description: "Image ID or URL-encoded S3 key" },
+        ],
+        responses: {
+          "200": { description: "Image deleted successfully" },
+          "404": { description: "Product or image not found" },
+        },
+      },
+    },
+    "/api/v1/admin/categories/{id}/image": {
+      post: {
+        tags: ["Upload", "Admin"],
+        summary: "Upload category image",
+        description: "Upload an image for a category. Image is stored in AWS S3.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "Category ID" }],
+        requestBody: {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: {
+                type: "object",
+                required: ["image"],
+                properties: {
+                  image: { type: "string", format: "binary", description: "Image file (max 10MB)" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Image uploaded successfully",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/UploadResponse" } } },
+          },
+          "400": { description: "Invalid file type or size" },
+          "404": { description: "Category not found" },
+        },
+      },
+      delete: {
+        tags: ["Upload", "Admin"],
+        summary: "Delete category image",
+        description: "Delete a category image from S3",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "Category ID" }],
+        responses: {
+          "200": { description: "Image deleted successfully" },
+          "404": { description: "Category not found" },
+        },
+      },
+    },
+    "/api/v1/admin/bonuses/{id}/image": {
+      post: {
+        tags: ["Upload", "Admin"],
+        summary: "Upload bonus item image",
+        description: "Upload an image for a bonus item. Image is stored in AWS S3.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "Bonus ID" }],
+        requestBody: {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: {
+                type: "object",
+                required: ["image"],
+                properties: {
+                  image: { type: "string", format: "binary", description: "Image file (max 10MB)" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Image uploaded successfully",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/UploadResponse" } } },
+          },
+          "400": { description: "Invalid file type or size" },
+          "404": { description: "Bonus not found" },
+        },
+      },
+      delete: {
+        tags: ["Upload", "Admin"],
+        summary: "Delete bonus item image",
+        description: "Delete a bonus item image from S3",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "Bonus ID" }],
+        responses: {
+          "200": { description: "Image deleted successfully" },
+          "404": { description: "Bonus not found" },
+        },
+      },
+    },
+    "/api/v1/admin/upload/presigned": {
+      post: {
+        tags: ["Upload", "Admin"],
+        summary: "Get presigned upload URL",
+        description: "Get a presigned URL for direct client-side upload to S3. URL expires in 1 hour.",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["folder", "filename", "mimeType"],
+                properties: {
+                  folder: { type: "string", enum: ["products", "categories", "bonuses"], example: "products" },
+                  filename: { type: "string", example: "product-photo.jpg" },
+                  mimeType: { type: "string", enum: ["image/jpeg", "image/png", "image/webp", "image/gif"], example: "image/jpeg" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Presigned URL generated",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/PresignedUploadResponse" } } },
+          },
+          "400": { description: "Invalid file type" },
         },
       },
     },

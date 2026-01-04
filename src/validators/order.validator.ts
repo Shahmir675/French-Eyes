@@ -37,21 +37,6 @@ export const createOrderSchema = z
       message: "Address is required for delivery orders",
       path: ["addressId"],
     }
-  )
-  .refine(
-    (data) => {
-      if (
-        (data.paymentMethod === "stripe" || data.paymentMethod === "paypal") &&
-        !data.paymentIntentId
-      ) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: "Payment intent ID is required for online payments",
-      path: ["paymentIntentId"],
-    }
   );
 
 export const orderIdParamSchema = z.object({

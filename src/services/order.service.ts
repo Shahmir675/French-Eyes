@@ -1,9 +1,14 @@
 import { Types } from "mongoose";
+import Stripe from "stripe";
 import { Order } from "../models/order.model.js";
 import { Cart } from "../models/cart.model.js";
 import { Address } from "../models/address.model.js";
 import { Product } from "../models/product.model.js";
+import { Payment } from "../models/payment.model.js";
 import { AppError } from "../utils/errors.js";
+import { config } from "../config/index.js";
+
+const stripe = new Stripe(config.stripe.secretKey);
 import type {
   IOrder,
   OrderItem,
@@ -52,6 +57,7 @@ interface OrderResponse {
   prepTime?: number;
   paymentMethod: string;
   paymentStatus: string;
+  clientSecret?: string;
   notes?: string;
   review?: {
     rating: number;
@@ -238,8 +244,7 @@ export class OrderService {
       Math.max(0, subtotal + tax + deliveryFee + tip - discount) * 100
     ) / 100;
 
-    const paymentStatus =
-      input.paymentMethod === "cash" ? "pending" : "paid";
+    const paymentStatus = "pending";
 
     const orderData: Partial<IOrder> = {
       orderNumber: this.generateOrderNumber(),
@@ -288,7 +293,48 @@ export class OrderService {
       }
     );
 
-    return this.mapOrder(order);
+    let clientSecret: string | undefined;
+
+    if (input.paymentMethod === "stripe") {
+      const amountInCents = Math.round(total * 100);
+
+      if (amountInCents >= 50) {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents,
+          currency: "eur",
+          metadata: {
+            orderId: order._id.toString(),
+            userId: userId,
+            orderNumber: order.orderNumber,
+          },
+          automatic_payment_methods: {
+            enabled: true,
+          },
+        });
+
+        await Payment.create({
+          orderId: order._id,
+          userId: new Types.ObjectId(userId),
+          provider: "stripe",
+          providerPaymentId: paymentIntent.id,
+          amount: total,
+          currency: "EUR",
+          status: "pending",
+          clientSecret: paymentIntent.client_secret,
+        });
+
+        order.paymentIntentId = paymentIntent.id;
+        await order.save();
+
+        clientSecret = paymentIntent.client_secret || undefined;
+      }
+    }
+
+    const response = this.mapOrder(order);
+    if (clientSecret) {
+      response.clientSecret = clientSecret;
+    }
+    return response;
   }
 
   static async getOrders(userId: string, query: GetOrdersQuery): Promise<OrderListResponse> {
