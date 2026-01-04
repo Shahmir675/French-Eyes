@@ -2,6 +2,8 @@ import type { Response, NextFunction } from "express";
 import { AdminService } from "../services/admin.service.js";
 import { sendSuccess, sendNoContent } from "../utils/response.js";
 import type { AuthenticatedAdminRequest } from "../types/index.js";
+import { s3Service } from "../services/s3.service.js";
+import { AppError } from "../utils/errors.js";
 import type {
   ListUsersQuery,
   UpdateUserStatusInput,
@@ -361,6 +363,41 @@ export class AdminController {
       const { products } = req.body as BulkUpdateAvailabilityInput;
       const result = await AdminService.bulkUpdateAvailability(products);
       sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async uploadProductImage(req: AuthenticatedAdminRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const file = req.file;
+
+      if (!file) {
+        throw AppError.validation("No file uploaded");
+      }
+
+      // Verify product exists
+      await AdminService.getProductById(id!);
+
+      // Upload to S3
+      const result = await s3Service.uploadProductImage(
+        file.buffer,
+        file.mimetype,
+        id!,
+        file.originalname
+      );
+
+      // Update product with new image URL
+      const product = await AdminService.updateProduct(id!, {
+        $push: { images: result.url }
+      } as unknown as UpdateProductInput);
+
+      sendSuccess(res, {
+        url: result.url,
+        key: result.key,
+        product
+      }, 201);
     } catch (error) {
       next(error);
     }

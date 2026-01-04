@@ -1,8 +1,22 @@
 import { Router } from "express";
+import multer from "multer";
 import { AdminAuthController } from "../controllers/admin-auth.controller.js";
 import { AdminController } from "../controllers/admin.controller.js";
 import { authenticateAdmin, requireRole } from "../middleware/admin-auth.js";
 import { validate } from "../middleware/validate.js";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (_req, file, cb) => {
+    const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${file.mimetype} is not allowed`));
+    }
+  },
+});
 import {
   adminLoginSchema,
   adminRefreshTokenSchema,
@@ -86,6 +100,7 @@ router.patch("/products/:id", authenticateAdmin, validate(updateProductSchema), 
 router.delete("/products/:id", authenticateAdmin, AdminController.deleteProduct);
 router.patch("/products/:id/availability", authenticateAdmin, validate(updateProductAvailabilitySchema), AdminController.updateProductAvailability);
 router.post("/products/bulk-availability", authenticateAdmin, validate(bulkUpdateAvailabilitySchema), AdminController.bulkUpdateAvailability);
+router.post("/products/:id/images", authenticateAdmin, upload.single("image"), AdminController.uploadProductImage);
 
 router.get("/zones", authenticateAdmin, AdminController.listZones);
 router.post("/zones", authenticateAdmin, validate(createZoneSchema), AdminController.createZone);

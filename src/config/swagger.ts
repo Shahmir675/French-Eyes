@@ -31,7 +31,6 @@ export const swaggerDocument = {
     { name: "Driver", description: "Driver operations" },
     { name: "Admin", description: "Admin management endpoints" },
     { name: "Devices", description: "POS/Printer device management" },
-    { name: "Upload", description: "File upload and S3 media storage" },
     { name: "WebSocket", description: "Real-time WebSocket endpoints" },
   ],
   components: {
@@ -2000,7 +1999,7 @@ export const swaggerDocument = {
     },
     "/api/v1/admin/products/{id}/images": {
       post: {
-        tags: ["Upload", "Admin"],
+        tags: ["Admin"],
         summary: "Upload product image",
         description: "Upload an image for a product. Image is stored in AWS S3. Max size: 10MB. Allowed types: JPEG, PNG, WebP, GIF.",
         security: [{ bearerAuth: [] }],
@@ -2031,7 +2030,7 @@ export const swaggerDocument = {
     },
     "/api/v1/admin/products/{id}/images/{imageId}": {
       delete: {
-        tags: ["Upload", "Admin"],
+        tags: ["Admin"],
         summary: "Delete product image",
         description: "Delete a product image from S3",
         security: [{ bearerAuth: [] }],
@@ -2047,7 +2046,7 @@ export const swaggerDocument = {
     },
     "/api/v1/admin/categories/{id}/image": {
       post: {
-        tags: ["Upload", "Admin"],
+        tags: ["Admin"],
         summary: "Upload category image",
         description: "Upload an image for a category. Image is stored in AWS S3.",
         security: [{ bearerAuth: [] }],
@@ -2076,7 +2075,7 @@ export const swaggerDocument = {
         },
       },
       delete: {
-        tags: ["Upload", "Admin"],
+        tags: ["Admin"],
         summary: "Delete category image",
         description: "Delete a category image from S3",
         security: [{ bearerAuth: [] }],
@@ -2089,7 +2088,7 @@ export const swaggerDocument = {
     },
     "/api/v1/admin/bonuses/{id}/image": {
       post: {
-        tags: ["Upload", "Admin"],
+        tags: ["Admin"],
         summary: "Upload bonus item image",
         description: "Upload an image for a bonus item. Image is stored in AWS S3.",
         security: [{ bearerAuth: [] }],
@@ -2118,7 +2117,7 @@ export const swaggerDocument = {
         },
       },
       delete: {
-        tags: ["Upload", "Admin"],
+        tags: ["Admin"],
         summary: "Delete bonus item image",
         description: "Delete a bonus item image from S3",
         security: [{ bearerAuth: [] }],
@@ -2131,7 +2130,7 @@ export const swaggerDocument = {
     },
     "/api/v1/admin/upload/presigned": {
       post: {
-        tags: ["Upload", "Admin"],
+        tags: ["Admin"],
         summary: "Get presigned upload URL",
         description: "Get a presigned URL for direct client-side upload to S3. URL expires in 1 hour.",
         security: [{ bearerAuth: [] }],
