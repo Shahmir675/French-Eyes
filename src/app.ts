@@ -1,4 +1,4 @@
-import express, { Express } from "express";
+import express, { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
@@ -12,18 +12,46 @@ import { PaymentController } from "./controllers/payment.controller.js";
 export function createApp(): Express {
   const app = express();
 
+  // Helmet middleware - skip for /docs and /openapi.json
+  const helmetMiddleware = helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https://validator.swagger.io"],
+      },
+    },
+  });
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith("/docs") || req.path === "/openapi.json") {
+      return next();
+    }
+    return helmetMiddleware(req, res, next);
+  });
+
+  // Swagger docs
   app.use(
-    helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          imgSrc: ["'self'", "data:", "https://validator.swagger.io"],
-        },
+    "/docs",
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerDocument, {
+      customCss: ".swagger-ui .topbar { display: none }",
+      customSiteTitle: "French Eyes API Documentation",
+      swaggerOptions: {
+        persistAuthorization: true,
+        displayRequestDuration: true,
+        docExpansion: "none",
+        filter: true,
+        showExtensions: true,
+        tryItOutEnabled: true,
       },
     })
   );
+
+  app.get("/openapi.json", (_req, res) => {
+    res.json(swaggerDocument);
+  });
 
   app.use(
     cors({
@@ -47,27 +75,6 @@ export function createApp(): Express {
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
-  });
-
-  app.use(
-    "/docs",
-    swaggerUi.serve,
-    swaggerUi.setup(swaggerDocument, {
-      customCss: ".swagger-ui .topbar { display: none }",
-      customSiteTitle: "French Eyes API Documentation",
-      swaggerOptions: {
-        persistAuthorization: true,
-        displayRequestDuration: true,
-        docExpansion: "none",
-        filter: true,
-        showExtensions: true,
-        tryItOutEnabled: true,
-      },
-    })
-  );
-
-  app.get("/openapi.json", (_req, res) => {
-    res.json(swaggerDocument);
   });
 
   app.use("/api/v1", routes);
