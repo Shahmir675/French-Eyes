@@ -12,7 +12,18 @@ import { PaymentController } from "./controllers/payment.controller.js";
 export function createApp(): Express {
   const app = express();
 
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:", "https://validator.swagger.io"],
+        },
+      },
+    })
+  );
 
   app.use(
     cors({
