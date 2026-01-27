@@ -1,24 +1,17 @@
 import mongoose, { Schema, Model } from "mongoose";
 import type { IBonusItem } from "../types/index.js";
 
-const localizedStringSchema = new Schema(
-  {
-    en: { type: String, required: true, trim: true },
-    de: { type: String, required: true, trim: true },
-    fr: { type: String, required: true, trim: true },
-  },
-  { _id: false }
-);
-
 const bonusItemSchema = new Schema<IBonusItem>(
   {
     name: {
-      type: localizedStringSchema,
+      type: String,
       required: true,
+      trim: true,
     },
     description: {
-      type: localizedStringSchema,
+      type: String,
       required: true,
+      trim: true,
     },
     image: {
       type: String,

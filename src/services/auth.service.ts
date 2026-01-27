@@ -2,6 +2,8 @@ import { nanoid } from "nanoid";
 import { User } from "../models/user.model.js";
 import { TokenService } from "./token.service.js";
 import { EmailService } from "./email.service.js";
+import { OtpService } from "./otp.service.js";
+import { NotificationDbService } from "./notification-db.service.js";
 import { hashPassword, verifyPassword } from "../utils/password.js";
 import { AppError } from "../utils/errors.js";
 import { verifyFirebaseIdToken } from "./firebase-auth.service.js";
@@ -11,21 +13,24 @@ import type {
   SocialAuthInput,
   ForgotPasswordInput,
   ResetPasswordInput,
+  VerifyOtpInput,
+  CompleteProfileInput,
+  ChangePasswordInput,
 } from "../validators/auth.validator.js";
 
 export class AuthService {
-  static async register(
-    input: RegisterInput,
-    userAgent?: string
-  ): Promise<{
-    user: { id: string; email: string; name: string };
-    accessToken: string;
-    refreshToken: string;
+  static async register(input: RegisterInput): Promise<{
+    userId: string;
+    message: string;
+    expiresAt: Date;
   }> {
     const existingUser = await User.findOne({ email: input.email });
 
     if (existingUser) {
-      throw AppError.userExists();
+      if (existingUser.emailVerified) {
+        throw AppError.userExists();
+      }
+      await User.deleteOne({ _id: existingUser._id });
     }
 
     const passwordHash = await hashPassword(input.password);
@@ -33,12 +38,43 @@ export class AuthService {
     const user = await User.create({
       email: input.email,
       passwordHash,
-      name: input.name,
-      phone: input.phone,
+      fullName: "User",
+      phoneNumber: input.phoneNumber,
       authProvider: "email",
-      gdprConsent: input.gdprConsent,
-      language: input.language,
+      gdprConsent: input.agreeToPrivacyPolicy,
+      emailVerified: false,
+      notificationsEnabled: true,
     });
+
+    const otpResult = await OtpService.generate(
+      input.email,
+      "registration",
+      user._id.toString()
+    );
+
+    return {
+      userId: user._id.toString(),
+      message: otpResult.message,
+      expiresAt: otpResult.expiresAt,
+    };
+  }
+
+  static async verifyOtp(
+    input: VerifyOtpInput,
+    userAgent?: string
+  ): Promise<{
+    user: { id: string; email: string; fullName: string };
+    accessToken: string;
+    refreshToken: string;
+    profileComplete: boolean;
+  }> {
+    await OtpService.verify(input.email, input.code);
+
+    const user = await User.findOne({ email: input.email });
+
+    if (!user) {
+      throw AppError.notFound("User not found");
+    }
 
     const accessToken = TokenService.generateAccessToken(
       user._id.toString(),
@@ -50,24 +86,57 @@ export class AuthService {
       userAgent
     );
 
-    await EmailService.sendWelcomeEmail(user.email, user.name);
+    await NotificationDbService.createAccountNotification(user._id.toString());
 
     return {
       user: {
         id: user._id.toString(),
         email: user.email,
-        name: user.name,
+        fullName: user.fullName,
       },
       accessToken,
       refreshToken,
+      profileComplete: user.fullName !== "User",
     };
+  }
+
+  static async completeProfile(
+    userId: string,
+    input: CompleteProfileInput
+  ): Promise<{
+    user: { id: string; email: string; fullName: string; profilePicture?: string };
+  }> {
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        fullName: input.fullName,
+        ...(input.profilePicture && { profilePicture: input.profilePicture }),
+      },
+      { new: true }
+    );
+
+    if (!user) {
+      throw AppError.notFound("User not found");
+    }
+
+    const userResponse: { id: string; email: string; fullName: string; profilePicture?: string } = {
+      id: user._id.toString(),
+      email: user.email,
+      fullName: user.fullName,
+    };
+
+    if (user.profilePicture) {
+      userResponse.profilePicture = user.profilePicture;
+    }
+
+    return { user: userResponse };
   }
 
   static async login(
     input: LoginInput,
     userAgent?: string
   ): Promise<{
-    user: { id: string; email: string; name: string };
+    user: { id: string; email: string; fullName: string };
     accessToken: string;
     refreshToken: string;
   }> {
@@ -79,6 +148,10 @@ export class AuthService {
 
     if (user.status === "inactive") {
       throw AppError.userInactive();
+    }
+
+    if (!user.emailVerified) {
+      throw AppError.validation("Please verify your email first");
     }
 
     if (user.authProvider !== "email" || !user.passwordHash) {
@@ -105,7 +178,7 @@ export class AuthService {
       user: {
         id: user._id.toString(),
         email: user.email,
-        name: user.name,
+        fullName: user.fullName,
       },
       accessToken,
       refreshToken,
@@ -116,9 +189,10 @@ export class AuthService {
     input: SocialAuthInput,
     userAgent?: string
   ): Promise<{
-    user: { id: string; email: string; name: string };
+    user: { id: string; email: string; fullName: string };
     accessToken: string;
     refreshToken: string;
+    isNewUser: boolean;
   }> {
     const firebaseUser = await verifyFirebaseIdToken(input.token);
 
@@ -139,6 +213,8 @@ export class AuthService {
       ],
     });
 
+    let isNewUser = false;
+
     if (user) {
       if (user.status === "inactive") {
         throw AppError.userInactive();
@@ -156,21 +232,23 @@ export class AuthService {
         );
       }
     } else {
-      if (!input.phone || !input.gdprConsent) {
-        throw AppError.validation("Phone and GDPR consent are required for new users");
+      if (!input.phoneNumber) {
+        throw AppError.validation("Phone number is required for new users");
       }
 
+      isNewUser = true;
       user = await User.create({
         email: firebaseUser.email,
-        name: input.name || firebaseUser.name || "User",
-        phone: input.phone,
+        fullName: input.fullName || firebaseUser.name || "User",
+        phoneNumber: input.phoneNumber,
         authProvider: input.provider,
         providerId: firebaseUser.uid,
-        gdprConsent: input.gdprConsent,
-        language: "de",
+        gdprConsent: true,
+        emailVerified: true,
+        notificationsEnabled: true,
       });
 
-      await EmailService.sendWelcomeEmail(user.email, user.name);
+      await NotificationDbService.createAccountNotification(user._id.toString());
     }
 
     const accessToken = TokenService.generateAccessToken(
@@ -187,11 +265,41 @@ export class AuthService {
       user: {
         id: user._id.toString(),
         email: user.email,
-        name: user.name,
+        fullName: user.fullName,
       },
       accessToken,
       refreshToken,
+      isNewUser,
     };
+  }
+
+  static async changePassword(
+    userId: string,
+    input: ChangePasswordInput
+  ): Promise<{ message: string }> {
+    const user = await User.findById(userId);
+
+    if (!user) {
+      throw AppError.notFound("User not found");
+    }
+
+    if (user.authProvider !== "email" || !user.passwordHash) {
+      throw AppError.validation("Password change is not available for social login accounts");
+    }
+
+    const isValid = await verifyPassword(user.passwordHash, input.currentPassword);
+
+    if (!isValid) {
+      throw AppError.validation("Current password is incorrect");
+    }
+
+    const passwordHash = await hashPassword(input.newPassword);
+
+    await User.updateOne({ _id: userId }, { passwordHash });
+
+    await TokenService.invalidateAllUserSessions(userId);
+
+    return { message: "Password changed successfully" };
   }
 
   static async forgotPassword(input: ForgotPasswordInput): Promise<void> {
@@ -263,5 +371,9 @@ export class AuthService {
 
   static async logout(refreshToken: string): Promise<void> {
     await TokenService.invalidateRefreshToken(refreshToken);
+  }
+
+  static async resendOtp(email: string): Promise<{ message: string; expiresAt: Date }> {
+    return OtpService.resend(email);
   }
 }

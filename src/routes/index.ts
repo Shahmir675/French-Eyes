@@ -13,6 +13,8 @@ import supportRoutes from "./support.routes.js";
 import driverRoutes from "./driver.routes.js";
 import adminRoutes from "./admin.routes.js";
 import deviceRoutes from "./device.routes.js";
+import restaurantRoutes from "./restaurant.routes.js";
+import notificationRoutes from "./notification.routes.js";
 
 const router = Router();
 
@@ -30,5 +32,7 @@ router.use("/support", supportRoutes);
 router.use("/driver", driverRoutes);
 router.use("/admin", adminRoutes);
 router.use("/devices", deviceRoutes);
+router.use("/restaurants", restaurantRoutes);
+router.use("/notifications", notificationRoutes);
 
 export default router;

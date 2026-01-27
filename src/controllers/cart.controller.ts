@@ -99,20 +99,6 @@ export class CartController {
     }
   }
 
-  static async getBonusEligibility(
-    req: AuthenticatedRequest,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> {
-    try {
-      const userId = req.user!.userId;
-      const result = await CartService.getBonusEligibility(userId);
-      sendSuccess(res, result);
-    } catch (error) {
-      next(error);
-    }
-  }
-
   static async applyPromo(
     req: AuthenticatedRequest,
     res: Response,

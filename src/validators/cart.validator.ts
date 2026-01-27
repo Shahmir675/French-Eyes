@@ -2,28 +2,22 @@ import { z } from "zod";
 
 const objectIdRegex = /^[0-9a-fA-F]{24}$/;
 
-const selectedOptionSchema = z.object({
-  name: z.string().min(1, "Option name is required").trim(),
-  choice: z.string().min(1, "Option choice is required").trim(),
-});
-
-const selectedExtraSchema = z.object({
-  name: z.string().min(1, "Extra name is required").trim(),
+const selectedAddOnSchema = z.object({
+  name: z.string().min(1, "Add-on name is required").trim(),
 });
 
 export const addCartItemSchema = z.object({
   productId: z.string().regex(objectIdRegex, "Invalid product ID"),
+  restaurantId: z.string().regex(objectIdRegex, "Invalid restaurant ID"),
   quantity: z.number().int().min(1, "Quantity must be at least 1").default(1),
-  selectedOptions: z.array(selectedOptionSchema).optional().default([]),
-  selectedExtras: z.array(selectedExtraSchema).optional().default([]),
-  notes: z.string().trim().max(500, "Notes cannot exceed 500 characters").optional(),
+  selectedAddOns: z.array(selectedAddOnSchema).optional().default([]),
+  specialInstructions: z.string().trim().max(500, "Instructions cannot exceed 500 characters").optional(),
 });
 
 export const updateCartItemSchema = z.object({
   quantity: z.number().int().min(1, "Quantity must be at least 1").optional(),
-  selectedOptions: z.array(selectedOptionSchema).optional(),
-  selectedExtras: z.array(selectedExtraSchema).optional(),
-  notes: z.string().trim().max(500, "Notes cannot exceed 500 characters").optional(),
+  selectedAddOns: z.array(selectedAddOnSchema).optional(),
+  specialInstructions: z.string().trim().max(500, "Instructions cannot exceed 500 characters").optional(),
 });
 
 export const cartItemIdParamSchema = z.object({

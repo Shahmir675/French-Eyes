@@ -16,12 +16,15 @@ export class UserService {
   static async getProfile(userId: string): Promise<{
     id: string;
     email: string;
-    name: string;
-    phone: string;
+    fullName: string;
+    phoneNumber: string;
+    profilePicture?: string;
     authProvider: string;
     loyaltyPoints: number;
     language: string;
     status: string;
+    emailVerified: boolean;
+    notificationsEnabled: boolean;
     createdAt: Date;
   }> {
     const user = await User.findById(userId);
@@ -30,17 +33,38 @@ export class UserService {
       throw AppError.userNotFound();
     }
 
-    return {
+    const result: {
+      id: string;
+      email: string;
+      fullName: string;
+      phoneNumber: string;
+      profilePicture?: string;
+      authProvider: string;
+      loyaltyPoints: number;
+      language: string;
+      status: string;
+      emailVerified: boolean;
+      notificationsEnabled: boolean;
+      createdAt: Date;
+    } = {
       id: user._id.toString(),
       email: user.email,
-      name: user.name,
-      phone: user.phone,
+      fullName: user.fullName,
+      phoneNumber: user.phoneNumber,
       authProvider: user.authProvider,
       loyaltyPoints: user.loyaltyPoints,
       language: user.language,
       status: user.status,
+      emailVerified: user.emailVerified,
+      notificationsEnabled: user.notificationsEnabled,
       createdAt: user.createdAt,
     };
+
+    if (user.profilePicture) {
+      result.profilePicture = user.profilePicture;
+    }
+
+    return result;
   }
 
   static async updateProfile(
@@ -49,9 +73,11 @@ export class UserService {
   ): Promise<{
     id: string;
     email: string;
-    name: string;
-    phone: string;
+    fullName: string;
+    phoneNumber: string;
+    profilePicture?: string;
     language: string;
+    notificationsEnabled: boolean;
   }> {
     const user = await User.findByIdAndUpdate(
       userId,
@@ -63,13 +89,28 @@ export class UserService {
       throw AppError.userNotFound();
     }
 
-    return {
+    const result: {
+      id: string;
+      email: string;
+      fullName: string;
+      phoneNumber: string;
+      profilePicture?: string;
+      language: string;
+      notificationsEnabled: boolean;
+    } = {
       id: user._id.toString(),
       email: user.email,
-      name: user.name,
-      phone: user.phone,
+      fullName: user.fullName,
+      phoneNumber: user.phoneNumber,
       language: user.language,
+      notificationsEnabled: user.notificationsEnabled,
     };
+
+    if (user.profilePicture) {
+      result.profilePicture = user.profilePicture;
+    }
+
+    return result;
   }
 
   static async deleteAccount(userId: string): Promise<void> {
@@ -104,27 +145,21 @@ export class UserService {
     return {
       user: {
         email: user.email,
-        name: user.name,
-        phone: user.phone,
+        fullName: user.fullName,
+        phoneNumber: user.phoneNumber,
         language: user.language,
         loyaltyPoints: user.loyaltyPoints,
         createdAt: user.createdAt,
       },
-      addresses: addresses.map((addr) => {
-        const data: Partial<IAddress> = {
-          label: addr.label,
-          street: addr.street,
-          city: addr.city,
-          zipCode: addr.zipCode,
-          country: addr.country,
-          isDefault: addr.isDefault,
-          createdAt: addr.createdAt,
-        };
-        if (addr.deliveryInstructions) {
-          data.deliveryInstructions = addr.deliveryInstructions;
-        }
-        return data;
-      }),
+      addresses: addresses.map((addr) => ({
+        title: addr.title,
+        street: addr.street,
+        state: addr.state,
+        zipCode: addr.zipCode,
+        completeAddress: addr.completeAddress,
+        isDefault: addr.isDefault,
+        createdAt: addr.createdAt,
+      })),
       exportedAt: new Date(),
     };
   }
@@ -132,14 +167,13 @@ export class UserService {
   static async getAddresses(userId: string): Promise<
     Array<{
       id: string;
-      label: string;
+      title: string;
       street: string;
-      city: string;
+      state: string;
       zipCode: string;
-      country: string;
+      completeAddress: string;
       coordinates?: { lat: number; lng: number };
       isDefault: boolean;
-      deliveryInstructions?: string;
     }>
   > {
     const addresses = await Address.find({ userId }).sort({ isDefault: -1, createdAt: -1 });
@@ -147,28 +181,24 @@ export class UserService {
     return addresses.map((addr) => {
       const base: {
         id: string;
-        label: string;
+        title: string;
         street: string;
-        city: string;
+        state: string;
         zipCode: string;
-        country: string;
+        completeAddress: string;
         isDefault: boolean;
         coordinates?: { lat: number; lng: number };
-        deliveryInstructions?: string;
       } = {
         id: addr._id.toString(),
-        label: addr.label,
+        title: addr.title,
         street: addr.street,
-        city: addr.city,
+        state: addr.state,
         zipCode: addr.zipCode,
-        country: addr.country,
+        completeAddress: addr.completeAddress,
         isDefault: addr.isDefault,
       };
       if (addr.coordinates) {
         base.coordinates = addr.coordinates;
-      }
-      if (addr.deliveryInstructions) {
-        base.deliveryInstructions = addr.deliveryInstructions;
       }
       return base;
     });
@@ -179,14 +209,13 @@ export class UserService {
     input: CreateAddressInput
   ): Promise<{
     id: string;
-    label: string;
+    title: string;
     street: string;
-    city: string;
+    state: string;
     zipCode: string;
-    country: string;
+    completeAddress: string;
     coordinates?: { lat: number; lng: number };
     isDefault: boolean;
-    deliveryInstructions?: string;
   }> {
     if (input.isDefault) {
       await Address.updateMany({ userId }, { isDefault: false });
@@ -199,28 +228,24 @@ export class UserService {
 
     const result: {
       id: string;
-      label: string;
+      title: string;
       street: string;
-      city: string;
+      state: string;
       zipCode: string;
-      country: string;
+      completeAddress: string;
       coordinates?: { lat: number; lng: number };
       isDefault: boolean;
-      deliveryInstructions?: string;
     } = {
       id: address._id.toString(),
-      label: address.label,
+      title: address.title,
       street: address.street,
-      city: address.city,
+      state: address.state,
       zipCode: address.zipCode,
-      country: address.country,
+      completeAddress: address.completeAddress,
       isDefault: address.isDefault,
     };
     if (address.coordinates) {
       result.coordinates = address.coordinates;
-    }
-    if (address.deliveryInstructions) {
-      result.deliveryInstructions = address.deliveryInstructions;
     }
     return result;
   }
@@ -231,14 +256,13 @@ export class UserService {
     input: UpdateAddressInput
   ): Promise<{
     id: string;
-    label: string;
+    title: string;
     street: string;
-    city: string;
+    state: string;
     zipCode: string;
-    country: string;
+    completeAddress: string;
     coordinates?: { lat: number; lng: number };
     isDefault: boolean;
-    deliveryInstructions?: string;
   }> {
     const address = await Address.findOneAndUpdate(
       { _id: addressId, userId },
@@ -252,28 +276,24 @@ export class UserService {
 
     const result: {
       id: string;
-      label: string;
+      title: string;
       street: string;
-      city: string;
+      state: string;
       zipCode: string;
-      country: string;
+      completeAddress: string;
       coordinates?: { lat: number; lng: number };
       isDefault: boolean;
-      deliveryInstructions?: string;
     } = {
       id: address._id.toString(),
-      label: address.label,
+      title: address.title,
       street: address.street,
-      city: address.city,
+      state: address.state,
       zipCode: address.zipCode,
-      country: address.country,
+      completeAddress: address.completeAddress,
       isDefault: address.isDefault,
     };
     if (address.coordinates) {
       result.coordinates = address.coordinates;
-    }
-    if (address.deliveryInstructions) {
-      result.deliveryInstructions = address.deliveryInstructions;
     }
     return result;
   }
@@ -291,14 +311,13 @@ export class UserService {
     addressId: string
   ): Promise<{
     id: string;
-    label: string;
+    title: string;
     street: string;
-    city: string;
+    state: string;
     zipCode: string;
-    country: string;
+    completeAddress: string;
     coordinates?: { lat: number; lng: number };
     isDefault: boolean;
-    deliveryInstructions?: string;
   }> {
     const address = await Address.findOne({ _id: addressId, userId });
 
@@ -313,28 +332,24 @@ export class UserService {
 
     const result: {
       id: string;
-      label: string;
+      title: string;
       street: string;
-      city: string;
+      state: string;
       zipCode: string;
-      country: string;
+      completeAddress: string;
       coordinates?: { lat: number; lng: number };
       isDefault: boolean;
-      deliveryInstructions?: string;
     } = {
       id: address._id.toString(),
-      label: address.label,
+      title: address.title,
       street: address.street,
-      city: address.city,
+      state: address.state,
       zipCode: address.zipCode,
-      country: address.country,
+      completeAddress: address.completeAddress,
       isDefault: address.isDefault,
     };
     if (address.coordinates) {
       result.coordinates = address.coordinates;
-    }
-    if (address.deliveryInstructions) {
-      result.deliveryInstructions = address.deliveryInstructions;
     }
     return result;
   }

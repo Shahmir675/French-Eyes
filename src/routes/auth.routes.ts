@@ -2,6 +2,7 @@ import { Router } from "express";
 import { AuthController } from "../controllers/auth.controller.js";
 import { validate } from "../middleware/validate.js";
 import { authRateLimiter } from "../middleware/rate-limit.js";
+import { authenticate } from "../middleware/auth.js";
 import {
   registerSchema,
   loginSchema,
@@ -9,7 +10,11 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   refreshTokenSchema,
+  verifyOtpSchema,
+  completeProfileSchema,
+  changePasswordSchema,
 } from "../validators/auth.validator.js";
+import { resendOtpSchema } from "../validators/otp.validator.js";
 
 const router = Router();
 
@@ -58,6 +63,36 @@ router.post(
   "/logout",
   validate(refreshTokenSchema),
   AuthController.logout
+);
+
+// OTP routes
+router.post(
+  "/otp/verify",
+  authRateLimiter,
+  validate(verifyOtpSchema),
+  AuthController.verifyOtp
+);
+
+router.post(
+  "/otp/resend",
+  authRateLimiter,
+  validate(resendOtpSchema),
+  AuthController.resendOtp
+);
+
+// Protected routes
+router.post(
+  "/complete-profile",
+  authenticate,
+  validate(completeProfileSchema),
+  AuthController.completeProfile
+);
+
+router.post(
+  "/change-password",
+  authenticate,
+  validate(changePasswordSchema),
+  AuthController.changePassword
 );
 
 export default router;

@@ -156,8 +156,7 @@ export class DeviceService {
           {
             name: "Test Product",
             quantity: 2,
-            options: ["Size: Large"],
-            extras: ["Extra Cheese"],
+            addOns: ["Size: Large", "Extra Cheese"],
             notes: "Test notes",
           },
         ],
@@ -176,32 +175,28 @@ export class DeviceService {
 
   static async formatOrderForPrint(orderId: string): Promise<OrderPrintPayload> {
     const order = await Order.findById(orderId)
-      .populate("userId", "name phone")
-      .populate("bonusId", "name")
+      .populate("userId", "fullName phoneNumber")
       .lean();
 
     if (!order) {
       throw AppError.orderNotFound();
     }
 
-    const user = order.userId as unknown as { name: string; phone: string };
-    const bonus = order.bonusId as unknown as { name: { en: string } } | null;
+    const user = order.userId as unknown as { fullName: string; phoneNumber: string };
 
     const items = order.items.map((item) => {
       const mapped: {
         name: string;
         quantity: number;
-        options: string[];
-        extras: string[];
+        addOns: string[];
         notes?: string;
       } = {
-        name: item.productName.en,
+        name: item.name,
         quantity: item.quantity,
-        options: item.selectedOptions.map((o) => `${o.name}: ${o.choice}`),
-        extras: item.selectedExtras.map((e) => e.name),
+        addOns: item.selectedAddOns.map((a) => a.name),
       };
-      if (item.notes) {
-        mapped.notes = item.notes;
+      if (item.specialInstructions) {
+        mapped.notes = item.specialInstructions;
       }
       return mapped;
     });
@@ -210,8 +205,8 @@ export class DeviceService {
       id: order._id.toString(),
       orderNumber: order.orderNumber,
       customer: {
-        name: user?.name || "Guest",
-        phone: user?.phone || "",
+        name: user?.fullName || "Guest",
+        phone: user?.phoneNumber || "",
       },
       type: order.type,
       items,
@@ -221,10 +216,6 @@ export class DeviceService {
 
     if (order.notes) {
       orderData.notes = order.notes;
-    }
-
-    if (bonus) {
-      orderData.bonus = { name: bonus.name.en };
     }
 
     return {

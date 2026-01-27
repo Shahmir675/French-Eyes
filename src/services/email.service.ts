@@ -47,4 +47,18 @@ export class EmailService {
 
     console.log(`Account deletion confirmation sent to ${email}`);
   }
+
+  static async sendOtpEmail(email: string, code: string): Promise<void> {
+    if (config.nodeEnv === "development") {
+      console.log("=".repeat(50));
+      console.log("OTP VERIFICATION EMAIL");
+      console.log("=".repeat(50));
+      console.log(`To: ${email}`);
+      console.log(`OTP Code: ${code}`);
+      console.log("=".repeat(50));
+      return;
+    }
+
+    console.log(`OTP email sent to ${email}`);
+  }
 }

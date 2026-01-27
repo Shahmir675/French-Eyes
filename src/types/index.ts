@@ -1,17 +1,21 @@
 import { Request } from "express";
 import { Document, Types } from "mongoose";
 
+// User Types
 export interface IUser extends Document {
   _id: Types.ObjectId;
   email: string;
-  passwordHash: string;
-  name: string;
-  phone: string;
-  authProvider: "email" | "google" | "facebook";
+  passwordHash?: string;
+  fullName: string;
+  phoneNumber: string;
+  profilePicture?: string;
+  authProvider: "email" | "google" | "apple";
   providerId?: string;
   loyaltyPoints: number;
   language: "de" | "en" | "fr";
   status: "active" | "inactive";
+  emailVerified: boolean;
+  notificationsEnabled: boolean;
   gdprConsent: boolean;
   passwordResetToken?: string;
   passwordResetExpires?: Date;
@@ -31,21 +35,112 @@ export interface ISession extends Document {
 export interface IAddress extends Document {
   _id: Types.ObjectId;
   userId: Types.ObjectId;
-  label: string;
+  title: string;
   street: string;
-  city: string;
+  state: string;
   zipCode: string;
-  country: string;
+  completeAddress: string;
   coordinates?: {
     lat: number;
     lng: number;
   };
   isDefault: boolean;
-  deliveryInstructions?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
+// Restaurant Types
+export interface IRestaurant extends Document {
+  _id: Types.ObjectId;
+  name: string;
+  imageUrl: string;
+  rating: number;
+  reviewCount: number;
+  priceRange: string;
+  deliveryTime: string;
+  deliveryFee: number;
+  cuisineTypes: string[];
+  satisfactionScore: number;
+  isOpen: boolean;
+  address: string;
+  phoneNumber: string;
+  coordinates: {
+    lat: number;
+    lng: number;
+  };
+  active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// OTP Types
+export type OtpType = "registration" | "password_reset";
+
+export interface IOtp extends Document {
+  _id: Types.ObjectId;
+  userId?: Types.ObjectId;
+  email: string;
+  code: string;
+  type: OtpType;
+  expiresAt: Date;
+  verified: boolean;
+  attempts: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Notification Types
+export type NotificationType = "account" | "order" | "cart" | "delivery" | "promo";
+
+export interface INotification extends Document {
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
+  type: NotificationType;
+  title: string;
+  message: string;
+  icon: string;
+  read: boolean;
+  actionUrl?: string;
+  orderId?: Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// PromoCode Types
+export type PromoCodeType = "percentage" | "fixed";
+
+export interface IPromoCode extends Document {
+  _id: Types.ObjectId;
+  code: string;
+  type: PromoCodeType;
+  value: number;
+  minOrderAmount?: number;
+  maxDiscount?: number;
+  usageLimit?: number;
+  usedCount: number;
+  validFrom: Date;
+  validUntil: Date;
+  active: boolean;
+  restaurantId?: Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Restaurant Review Types
+export interface IRestaurantReview extends Document {
+  _id: Types.ObjectId;
+  restaurantId: Types.ObjectId;
+  userId: Types.ObjectId;
+  orderId?: Types.ObjectId;
+  rating: number;
+  comment: string;
+  userName: string;
+  userAvatar?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Auth Types
 export interface AuthenticatedRequest extends Request {
   user?: {
     userId: string;
@@ -74,30 +169,17 @@ export interface ApiResponse<T = unknown> {
   };
 }
 
-export interface LocalizedString {
-  en: string;
-  de: string;
-  fr: string;
-}
-
-export interface ProductOption {
-  name: string;
-  required: boolean;
-  choices: Array<{
-    label: string;
-    priceModifier: number;
-  }>;
-}
-
-export interface ProductExtra {
+// Product Types
+export interface ProductAddOn {
   name: string;
   price: number;
 }
 
 export interface ICategory extends Document {
   _id: Types.ObjectId;
-  name: LocalizedString;
-  description: LocalizedString;
+  restaurantId: Types.ObjectId;
+  name: string;
+  description?: string;
   image?: string;
   sortOrder: number;
   active: boolean;
@@ -107,29 +189,27 @@ export interface ICategory extends Document {
 
 export interface IProduct extends Document {
   _id: Types.ObjectId;
-  name: LocalizedString;
-  description: LocalizedString;
-  price: number;
+  restaurantId: Types.ObjectId;
   categoryId: Types.ObjectId;
-  images: string[];
-  options: ProductOption[];
-  extras: ProductExtra[];
-  allergens: string[];
+  name: string;
+  description?: string;
+  price: number;
+  imageUrl: string;
+  rating: number;
+  reviewCount: number;
+  calories?: number;
+  servingSize?: string;
+  cookingTime: number;
+  addOns: ProductAddOn[];
+  discount?: number;
   available: boolean;
-  featured: boolean;
-  preparationTime: number;
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface SelectedOption {
-  name: string;
-  choice: string;
-  price: number;
-}
-
-export interface SelectedExtra {
+// Cart Types
+export interface SelectedAddOn {
   name: string;
   price: number;
 }
@@ -137,18 +217,19 @@ export interface SelectedExtra {
 export interface ICartItem {
   _id: Types.ObjectId;
   productId: Types.ObjectId;
-  productName: LocalizedString;
-  productPrice: number;
+  name: string;
+  imageUrl: string;
+  price: number;
   quantity: number;
-  selectedOptions: SelectedOption[];
-  selectedExtras: SelectedExtra[];
-  notes?: string;
+  selectedAddOns: SelectedAddOn[];
+  specialInstructions?: string;
   itemTotal: number;
 }
 
 export interface ICart extends Document {
   _id: Types.ObjectId;
   userId: Types.ObjectId;
+  restaurantId?: Types.ObjectId;
   items: ICartItem[];
   promoCode?: string;
   promoDiscount?: number;
@@ -158,22 +239,18 @@ export interface ICart extends Document {
 
 export interface CartCalculation {
   subtotal: number;
-  tax: number;
   deliveryFee: number;
   tip: number;
   discount: number;
   total: number;
-  bonusEligible: boolean;
-  bonusThreshold: number;
-  amountToBonus: number;
 }
 
-export type AuthProvider = "email" | "google" | "facebook";
+// Order Types
+export type AuthProvider = "email" | "google" | "apple";
 export type Language = "de" | "en" | "fr";
 export type UserStatus = "active" | "inactive";
-
 export type OrderType = "delivery" | "pickup";
-export type PaymentMethod = "cash" | "stripe" | "paypal";
+export type PaymentMethod = "cash" | "card" | "apple_pay";
 export type PaymentStatus = "pending" | "paid" | "refunded";
 export type OrderStatus =
   | "pending"
@@ -183,36 +260,43 @@ export type OrderStatus =
   | "picked_up"
   | "out_for_delivery"
   | "delivered"
-  | "completed"
   | "cancelled";
 
 export interface OrderAddress {
+  title: string;
   street: string;
-  city: string;
+  state: string;
   zipCode: string;
-  country: string;
+  completeAddress: string;
   coordinates?: {
     lat: number;
     lng: number;
   };
-  deliveryInstructions?: string;
 }
 
 export interface OrderItem {
   productId: Types.ObjectId;
-  productName: LocalizedString;
+  name: string;
+  imageUrl: string;
   quantity: number;
   unitPrice: number;
-  selectedOptions: SelectedOption[];
-  selectedExtras: SelectedExtra[];
-  notes?: string;
+  selectedAddOns: SelectedAddOn[];
+  specialInstructions?: string;
   itemTotal: number;
 }
 
-export interface StatusHistoryEntry {
+export interface StatusTimelineEntry {
   status: OrderStatus;
   timestamp: Date;
-  note?: string;
+}
+
+export interface DriverDetails {
+  name: string;
+  phone: string;
+  currentLocation?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface IOrderReview {
@@ -229,31 +313,33 @@ export interface IOrder extends Document {
   _id: Types.ObjectId;
   orderNumber: string;
   userId: Types.ObjectId;
+  restaurantId: Types.ObjectId;
+  restaurantName: string;
   driverId?: Types.ObjectId;
   type: OrderType;
   status: OrderStatus;
   items: OrderItem[];
   subtotal: number;
-  tax: number;
+  discount: number;
   deliveryFee: number;
   tip: number;
-  discount: number;
   total: number;
   address?: OrderAddress;
-  zoneId?: Types.ObjectId;
-  pickupTime?: Date;
-  prepTime?: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
-  paymentIntentId?: string;
-  bonusId?: Types.ObjectId;
+  loyaltyPointsUsed: number;
+  loyaltyPointsEarned: number;
+  promoCode?: string;
+  statusTimeline: StatusTimelineEntry[];
+  estimatedDeliveryTime?: Date;
+  driverDetails?: DriverDetails;
   notes?: string;
-  statusHistory: StatusHistoryEntry[];
   review?: IOrderReview;
   createdAt: Date;
   updatedAt: Date;
 }
 
+// Zone Types
 export type ZoneType = "zip" | "radius";
 
 export interface ZoneCoordinates {
@@ -276,14 +362,7 @@ export interface IDeliveryZone extends Document {
   updatedAt: Date;
 }
 
-export interface TimeSlot {
-  id: string;
-  startTime: string;
-  endTime: string;
-  available: boolean;
-  type: "delivery" | "pickup";
-}
-
+// Payment Types
 export type PaymentProvider = "stripe" | "paypal";
 export type PaymentTransactionStatus =
   | "pending"
@@ -312,6 +391,7 @@ export interface IPayment extends Document {
   updatedAt: Date;
 }
 
+// Loyalty Types
 export type LoyaltyTransactionType = "earn" | "redeem" | "expire" | "adjust";
 
 export interface ILoyaltyTransaction extends Document {
@@ -329,8 +409,8 @@ export type LoyaltyRewardType = "discount" | "free_item" | "bonus";
 
 export interface ILoyaltyReward extends Document {
   _id: Types.ObjectId;
-  name: LocalizedString;
-  description: LocalizedString;
+  name: string;
+  description: string;
   pointsCost: number;
   type: LoyaltyRewardType;
   value: number;
@@ -344,8 +424,8 @@ export interface ILoyaltyReward extends Document {
 
 export interface IBonusItem extends Document {
   _id: Types.ObjectId;
-  name: LocalizedString;
-  description: LocalizedString;
+  name: string;
+  description: string;
   image?: string;
   minOrderAmount: number;
   active: boolean;
@@ -356,6 +436,7 @@ export interface IBonusItem extends Document {
   updatedAt: Date;
 }
 
+// Support Types
 export type SupportTicketCategory = "order" | "delivery" | "payment" | "other";
 export type SupportTicketStatus = "open" | "in_progress" | "resolved" | "closed";
 export type MessageSender = "user" | "support";
@@ -381,6 +462,7 @@ export interface ISupportMessage extends Document {
   createdAt: Date;
 }
 
+// Driver Types
 export type DriverStatus = "active" | "inactive" | "busy";
 
 export interface DriverLocation {
@@ -394,6 +476,7 @@ export interface IDriver extends Document {
   passwordHash: string;
   name: string;
   phone: string;
+  profilePicture?: string;
   assignedZones: Types.ObjectId[];
   status: DriverStatus;
   currentLocation?: DriverLocation;
@@ -429,6 +512,7 @@ export interface AuthenticatedDriverRequest extends Request {
   };
 }
 
+// Admin Types
 export type AdminRole = "super_admin" | "admin" | "manager";
 export type AdminStatus = "active" | "inactive";
 
@@ -471,6 +555,7 @@ export interface AuthenticatedAdminRequest extends Request {
   };
 }
 
+// Settings Types
 export interface ISettings extends Document {
   _id: Types.ObjectId;
   key: string;
@@ -491,18 +576,7 @@ export interface IGDPRRequest extends Document {
   updatedAt: Date;
 }
 
-export interface IReview {
-  orderId: Types.ObjectId;
-  userId: Types.ObjectId;
-  rating: number;
-  comment?: string;
-  response?: string;
-  respondedAt?: Date;
-  respondedBy?: Types.ObjectId;
-  visible: boolean;
-  createdAt: Date;
-}
-
+// Device Types
 export type DeviceType = "thermal_printer" | "pos_terminal" | "display";
 export type DeviceStatus = "active" | "inactive" | "offline";
 
@@ -534,6 +608,7 @@ export interface DeviceTokenPayload {
   type: DeviceType;
 }
 
+// WebSocket Event Types
 export interface OrderPrintPayload {
   event: "new_order" | "order_update" | "order_cancelled";
   order: {
@@ -544,8 +619,7 @@ export interface OrderPrintPayload {
     items: Array<{
       name: string;
       quantity: number;
-      options: string[];
-      extras: string[];
+      addOns: string[];
       notes?: string;
     }>;
     notes?: string;
@@ -609,3 +683,12 @@ export interface SupportChatEvent {
 }
 
 export type WSClientType = "customer" | "admin" | "driver" | "device" | "support";
+
+// Time Slot Types
+export interface TimeSlot {
+  id: string;
+  startTime: string;
+  endTime: string;
+  available: boolean;
+  type: "delivery" | "pickup";
+}

@@ -1,21 +1,25 @@
 import { Product } from "../models/product.model.js";
 import { Category } from "../models/category.model.js";
 import { AppError } from "../utils/errors.js";
-import type { LocalizedString, ProductOption, ProductExtra } from "../types/index.js";
+import type { ProductAddOn, IProduct } from "../types/index.js";
 import type { ProductQueryInput, SearchQueryInput, PaginationQueryInput } from "../validators/product.validator.js";
 
 interface ProductResponse {
   id: string;
-  name: LocalizedString;
-  description: LocalizedString;
-  price: number;
+  restaurantId: string;
   categoryId: string;
-  images: string[];
-  options: ProductOption[];
-  extras: ProductExtra[];
-  allergens: string[];
+  name: string;
+  description?: string;
+  price: number;
+  imageUrl: string;
+  rating: number;
+  reviewCount: number;
+  calories?: number;
+  servingSize?: string;
+  cookingTime: number;
+  addOns: ProductAddOn[];
+  discount?: number;
   available: boolean;
-  preparationTime: number;
 }
 
 interface ProductListResponse {
@@ -29,32 +33,25 @@ interface ProductListResponse {
 }
 
 export class ProductService {
-  private static mapProduct(product: {
-    _id: { toString: () => string };
-    name: LocalizedString;
-    description: LocalizedString;
-    price: number;
-    categoryId: { toString: () => string };
-    images: string[];
-    options: ProductOption[];
-    extras: ProductExtra[];
-    allergens: string[];
-    available: boolean;
-    preparationTime: number;
-  }): ProductResponse {
-    return {
+  private static mapProduct(product: IProduct): ProductResponse {
+    const result: ProductResponse = {
       id: product._id.toString(),
-      name: product.name,
-      description: product.description,
-      price: product.price,
+      restaurantId: product.restaurantId.toString(),
       categoryId: product.categoryId.toString(),
-      images: product.images,
-      options: product.options,
-      extras: product.extras,
-      allergens: product.allergens,
+      name: product.name,
+      price: product.price,
+      imageUrl: product.imageUrl,
+      rating: product.rating,
+      reviewCount: product.reviewCount,
+      cookingTime: product.cookingTime,
+      addOns: product.addOns,
       available: product.available,
-      preparationTime: product.preparationTime,
     };
+    if (product.description) result.description = product.description;
+    if (product.calories) result.calories = product.calories;
+    if (product.servingSize) result.servingSize = product.servingSize;
+    if (product.discount) result.discount = product.discount;
+    return result;
   }
 
   static async getAll(input: ProductQueryInput): Promise<ProductListResponse> {

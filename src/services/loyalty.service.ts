@@ -4,7 +4,7 @@ import { LoyaltyTransaction } from "../models/loyaltyTransaction.model.js";
 import { LoyaltyReward } from "../models/loyaltyReward.model.js";
 import { BonusItem } from "../models/bonus.model.js";
 import { AppError } from "../utils/errors.js";
-import type { LocalizedString, LoyaltyTransactionType } from "../types/index.js";
+import type { LoyaltyTransactionType } from "../types/index.js";
 
 const POINTS_PER_EURO = 0.1;
 
@@ -36,8 +36,8 @@ interface TransactionHistoryResponse {
 
 interface RewardResponse {
   id: string;
-  name: LocalizedString;
-  description: LocalizedString;
+  name: string;
+  description: string;
   pointsCost: number;
   type: string;
   value: number;
@@ -56,8 +56,8 @@ interface RedemptionResponse {
 
 interface BonusResponse {
   id: string;
-  name: LocalizedString;
-  description: LocalizedString;
+  name: string;
+  description: string;
   image: string | undefined;
   minOrderAmount: number;
   validFrom: Date | undefined;
@@ -77,8 +77,8 @@ interface LeanTransaction {
 
 interface LeanReward {
   _id: Types.ObjectId;
-  name: LocalizedString;
-  description: LocalizedString;
+  name: string;
+  description: string;
   pointsCost: number;
   type: string;
   value: number;
@@ -90,8 +90,8 @@ interface LeanReward {
 
 interface LeanBonus {
   _id: Types.ObjectId;
-  name: LocalizedString;
-  description: LocalizedString;
+  name: string;
+  description: string;
   image?: string;
   minOrderAmount: number;
   active: boolean;
@@ -298,7 +298,7 @@ export class LoyaltyService {
       type: "redeem",
       points: -reward.pointsCost,
       rewardId: reward._id,
-      description: `Redeemed: ${reward.name.en}`,
+      description: `Redeemed: ${reward.name}`,
     });
 
     return {

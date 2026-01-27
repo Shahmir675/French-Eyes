@@ -1,17 +1,19 @@
 import { z } from "zod";
 
 export const updateProfileSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters").trim().optional(),
-  phone: z.string().min(6, "Phone number must be at least 6 characters").trim().optional(),
+  fullName: z.string().min(2, "Name must be at least 2 characters").trim().optional(),
+  phoneNumber: z.string().min(6, "Phone number must be at least 6 characters").trim().optional(),
+  profilePicture: z.string().url("Invalid URL format").optional(),
+  notificationsEnabled: z.boolean().optional(),
   language: z.enum(["de", "en", "fr"]).optional(),
 });
 
 export const createAddressSchema = z.object({
-  label: z.string().min(1, "Label is required").trim(),
+  title: z.string().min(1, "Title is required").trim(),
   street: z.string().min(1, "Street is required").trim(),
-  city: z.string().min(1, "City is required").trim(),
+  state: z.string().min(1, "State is required").trim(),
   zipCode: z.string().min(1, "Zip code is required").trim(),
-  country: z.string().trim().optional().default("DE"),
+  completeAddress: z.string().min(1, "Complete address is required").trim(),
   coordinates: z
     .object({
       lat: z.number(),
@@ -19,22 +21,20 @@ export const createAddressSchema = z.object({
     })
     .optional(),
   isDefault: z.boolean().optional().default(false),
-  deliveryInstructions: z.string().trim().optional(),
 });
 
 export const updateAddressSchema = z.object({
-  label: z.string().min(1, "Label is required").trim().optional(),
+  title: z.string().min(1, "Title is required").trim().optional(),
   street: z.string().min(1, "Street is required").trim().optional(),
-  city: z.string().min(1, "City is required").trim().optional(),
+  state: z.string().min(1, "State is required").trim().optional(),
   zipCode: z.string().min(1, "Zip code is required").trim().optional(),
-  country: z.string().trim().optional(),
+  completeAddress: z.string().min(1, "Complete address is required").trim().optional(),
   coordinates: z
     .object({
       lat: z.number(),
       lng: z.number(),
     })
     .optional(),
-  deliveryInstructions: z.string().trim().optional(),
 });
 
 export const addressIdParamSchema = z.object({

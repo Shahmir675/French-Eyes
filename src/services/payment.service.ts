@@ -152,9 +152,6 @@ export class PaymentService {
       throw error;
     }
 
-    order.paymentIntentId = paymentIntent.id;
-    await order.save();
-
     return this.mapPayment(payment);
   }
 
@@ -211,7 +208,7 @@ export class PaymentService {
         paymentStatus: "paid",
         status: "confirmed",
         $push: {
-          statusHistory: {
+          statusTimeline: {
             status: "confirmed",
             timestamp: new Date(),
             note: "Payment confirmed via Stripe",
@@ -298,7 +295,7 @@ export class PaymentService {
           paymentStatus: "paid",
           status: "confirmed",
           $push: {
-            statusHistory: {
+            statusTimeline: {
               status: "confirmed",
               timestamp: new Date(),
               note: "Payment confirmed via Stripe webhook",
@@ -476,7 +473,7 @@ export class PaymentService {
         paymentStatus: "paid",
         status: "confirmed",
         $push: {
-          statusHistory: {
+          statusTimeline: {
             status: "confirmed",
             timestamp: new Date(),
             note: "Payment confirmed via PayPal",
@@ -600,7 +597,7 @@ export class PaymentService {
           paymentStatus: "paid",
           status: "confirmed",
           $push: {
-            statusHistory: {
+            statusTimeline: {
               status: "confirmed",
               timestamp: new Date(),
               note: "Payment confirmed via PayPal webhook",

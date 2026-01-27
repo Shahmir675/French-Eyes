@@ -8,7 +8,7 @@ const addressSchema = new Schema<IAddress>(
       ref: "User",
       required: true,
     },
-    label: {
+    title: {
       type: String,
       required: true,
       trim: true,
@@ -18,7 +18,7 @@ const addressSchema = new Schema<IAddress>(
       required: true,
       trim: true,
     },
-    city: {
+    state: {
       type: String,
       required: true,
       trim: true,
@@ -28,9 +28,9 @@ const addressSchema = new Schema<IAddress>(
       required: true,
       trim: true,
     },
-    country: {
+    completeAddress: {
       type: String,
-      default: "DE",
+      required: true,
       trim: true,
     },
     coordinates: {
@@ -44,10 +44,6 @@ const addressSchema = new Schema<IAddress>(
     isDefault: {
       type: Boolean,
       default: false,
-    },
-    deliveryInstructions: {
-      type: String,
-      trim: true,
     },
   },
   {

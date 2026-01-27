@@ -1,13 +1,12 @@
 import { Types } from "mongoose";
 import { Cart } from "../models/cart.model.js";
 import { Product } from "../models/product.model.js";
+import { Restaurant } from "../models/restaurant.model.js";
 import { AppError } from "../utils/errors.js";
 import type {
   ICart,
   ICartItem,
-  LocalizedString,
-  SelectedOption,
-  SelectedExtra,
+  SelectedAddOn,
   CartCalculation,
 } from "../types/index.js";
 import type {
@@ -16,24 +15,23 @@ import type {
   CalculateCartInput,
 } from "../validators/cart.validator.js";
 
-const BONUS_THRESHOLD = 20.01;
-const TAX_RATE = 0.1;
 const DEFAULT_DELIVERY_FEE = 3.0;
 
 interface CartItemResponse {
   id: string;
   productId: string;
-  productName: LocalizedString;
-  productPrice: number;
+  name: string;
+  imageUrl: string;
+  price: number;
   quantity: number;
-  selectedOptions: SelectedOption[];
-  selectedExtras: SelectedExtra[];
-  notes?: string;
+  selectedAddOns: SelectedAddOn[];
+  specialInstructions?: string;
   itemTotal: number;
 }
 
 interface CartResponse {
   id: string;
+  restaurantId?: string;
   items: CartItemResponse[];
   promoCode?: string;
   promoDiscount?: number;
@@ -46,16 +44,16 @@ export class CartService {
     const response: CartItemResponse = {
       id: item._id.toString(),
       productId: item.productId.toString(),
-      productName: item.productName,
-      productPrice: item.productPrice,
+      name: item.name,
+      imageUrl: item.imageUrl,
+      price: item.price,
       quantity: item.quantity,
-      selectedOptions: item.selectedOptions,
-      selectedExtras: item.selectedExtras,
+      selectedAddOns: item.selectedAddOns,
       itemTotal: item.itemTotal,
     };
 
-    if (item.notes) {
-      response.notes = item.notes;
+    if (item.specialInstructions) {
+      response.specialInstructions = item.specialInstructions;
     }
 
     return response;
@@ -73,6 +71,10 @@ export class CartService {
       subtotal,
     };
 
+    if (cart.restaurantId) {
+      response.restaurantId = cart.restaurantId.toString();
+    }
+
     if (cart.promoCode) {
       response.promoCode = cart.promoCode;
     }
@@ -87,12 +89,10 @@ export class CartService {
   private static calculateItemTotal(
     basePrice: number,
     quantity: number,
-    selectedOptions: SelectedOption[],
-    selectedExtras: SelectedExtra[]
+    selectedAddOns: SelectedAddOn[]
   ): number {
-    const optionsTotal = selectedOptions.reduce((sum, opt) => sum + opt.price, 0);
-    const extrasTotal = selectedExtras.reduce((sum, ext) => sum + ext.price, 0);
-    return Math.round((basePrice + optionsTotal + extrasTotal) * quantity * 100) / 100;
+    const addOnsTotal = selectedAddOns.reduce((sum, addon) => sum + addon.price, 0);
+    return Math.round((basePrice + addOnsTotal) * quantity * 100) / 100;
   }
 
   static async getCart(userId: string): Promise<CartResponse> {
@@ -106,7 +106,7 @@ export class CartService {
   }
 
   static async addItem(userId: string, input: AddCartItemInput): Promise<CartResponse> {
-    const { productId, quantity, selectedOptions, selectedExtras, notes } = input;
+    const { restaurantId, productId, quantity, selectedAddOns, specialInstructions } = input;
 
     const product = await Product.findById(productId);
     if (!product) {
@@ -117,72 +117,49 @@ export class CartService {
       throw AppError.productUnavailable();
     }
 
-    const validatedOptions: SelectedOption[] = [];
-    for (const selected of selectedOptions) {
-      const productOption = product.options.find((opt) => opt.name === selected.name);
-      if (!productOption) {
-        throw AppError.invalidOptionSelection(`Unknown option: ${selected.name}`);
+    // Verify restaurant matches
+    if (product.restaurantId.toString() !== restaurantId) {
+      throw AppError.validation("Product does not belong to specified restaurant");
+    }
+
+    // Validate add-ons
+    const validatedAddOns: SelectedAddOn[] = [];
+    for (const selected of selectedAddOns || []) {
+      const productAddOn = product.addOns.find((addon) => addon.name === selected.name);
+      if (!productAddOn) {
+        throw AppError.invalidOptionSelection(`Unknown add-on: ${selected.name}`);
       }
 
-      const choice = productOption.choices.find((c) => c.label === selected.choice);
-      if (!choice) {
-        throw AppError.invalidOptionSelection(
-          `Invalid choice '${selected.choice}' for option '${selected.name}'`
-        );
-      }
-
-      validatedOptions.push({
+      validatedAddOns.push({
         name: selected.name,
-        choice: selected.choice,
-        price: choice.priceModifier,
+        price: productAddOn.price,
       });
     }
 
-    for (const productOption of product.options) {
-      if (productOption.required) {
-        const hasSelection = validatedOptions.some((opt) => opt.name === productOption.name);
-        if (!hasSelection) {
-          throw AppError.invalidOptionSelection(
-            `Required option '${productOption.name}' must be selected`
-          );
-        }
-      }
-    }
-
-    const validatedExtras: SelectedExtra[] = [];
-    for (const selected of selectedExtras) {
-      const productExtra = product.extras.find((ext) => ext.name === selected.name);
-      if (!productExtra) {
-        throw AppError.invalidOptionSelection(`Unknown extra: ${selected.name}`);
-      }
-
-      validatedExtras.push({
-        name: selected.name,
-        price: productExtra.price,
-      });
-    }
-
-    const itemTotal = this.calculateItemTotal(
-      product.price,
-      quantity,
-      validatedOptions,
-      validatedExtras
-    );
+    const itemTotal = this.calculateItemTotal(product.price, quantity, validatedAddOns);
 
     let cart = await Cart.findOne({ userId });
     if (!cart) {
-      cart = new Cart({ userId, items: [] });
+      cart = new Cart({ userId, restaurantId: new Types.ObjectId(restaurantId), items: [] });
+    } else if (cart.restaurantId && cart.restaurantId.toString() !== restaurantId) {
+      // Clear cart if different restaurant
+      cart.items = [];
+      cart.restaurantId = new Types.ObjectId(restaurantId);
+      delete (cart as unknown as Record<string, unknown>)["promoCode"];
+      delete (cart as unknown as Record<string, unknown>)["promoDiscount"];
+    } else if (!cart.restaurantId) {
+      cart.restaurantId = new Types.ObjectId(restaurantId);
     }
 
     const newItem = {
       _id: new Types.ObjectId(),
       productId: new Types.ObjectId(productId),
-      productName: product.name,
-      productPrice: product.price,
+      name: product.name,
+      imageUrl: product.imageUrl,
+      price: product.price,
       quantity,
-      selectedOptions: validatedOptions,
-      selectedExtras: validatedExtras,
-      notes,
+      selectedAddOns: validatedAddOns,
+      specialInstructions,
       itemTotal,
     };
 
@@ -216,79 +193,33 @@ export class CartService {
       item.quantity = input.quantity;
     }
 
-    if (input.selectedOptions !== undefined) {
+    if (input.selectedAddOns !== undefined) {
       const product = await Product.findById(item.productId);
       if (!product) {
         throw AppError.productNotFound();
       }
 
-      const validatedOptions: SelectedOption[] = [];
-      for (const selected of input.selectedOptions) {
-        const productOption = product.options.find((opt) => opt.name === selected.name);
-        if (!productOption) {
-          throw AppError.invalidOptionSelection(`Unknown option: ${selected.name}`);
+      const validatedAddOns: SelectedAddOn[] = [];
+      for (const selected of input.selectedAddOns) {
+        const productAddOn = product.addOns.find((addon) => addon.name === selected.name);
+        if (!productAddOn) {
+          throw AppError.invalidOptionSelection(`Unknown add-on: ${selected.name}`);
         }
 
-        const choice = productOption.choices.find((c) => c.label === selected.choice);
-        if (!choice) {
-          throw AppError.invalidOptionSelection(
-            `Invalid choice '${selected.choice}' for option '${selected.name}'`
-          );
-        }
-
-        validatedOptions.push({
+        validatedAddOns.push({
           name: selected.name,
-          choice: selected.choice,
-          price: choice.priceModifier,
+          price: productAddOn.price,
         });
       }
 
-      for (const productOption of product.options) {
-        if (productOption.required) {
-          const hasSelection = validatedOptions.some((opt) => opt.name === productOption.name);
-          if (!hasSelection) {
-            throw AppError.invalidOptionSelection(
-              `Required option '${productOption.name}' must be selected`
-            );
-          }
-        }
-      }
-
-      item.selectedOptions = validatedOptions;
+      item.selectedAddOns = validatedAddOns;
     }
 
-    if (input.selectedExtras !== undefined) {
-      const product = await Product.findById(item.productId);
-      if (!product) {
-        throw AppError.productNotFound();
-      }
-
-      const validatedExtras: SelectedExtra[] = [];
-      for (const selected of input.selectedExtras) {
-        const productExtra = product.extras.find((ext) => ext.name === selected.name);
-        if (!productExtra) {
-          throw AppError.invalidOptionSelection(`Unknown extra: ${selected.name}`);
-        }
-
-        validatedExtras.push({
-          name: selected.name,
-          price: productExtra.price,
-        });
-      }
-
-      item.selectedExtras = validatedExtras;
+    if (input.specialInstructions !== undefined) {
+      item.specialInstructions = input.specialInstructions;
     }
 
-    if (input.notes !== undefined) {
-      item.notes = input.notes;
-    }
-
-    item.itemTotal = this.calculateItemTotal(
-      item.productPrice,
-      item.quantity,
-      item.selectedOptions,
-      item.selectedExtras
-    );
+    item.itemTotal = this.calculateItemTotal(item.price, item.quantity, item.selectedAddOns);
 
     await cart.save();
 
@@ -325,63 +256,39 @@ export class CartService {
   }
 
   static async calculate(userId: string, input: CalculateCartInput): Promise<CartCalculation> {
-    const { tip, addressId } = input;
+    const { tip } = input;
 
     const cart = await Cart.findOne({ userId });
     if (!cart || cart.items.length === 0) {
       return {
         subtotal: 0,
-        tax: 0,
         deliveryFee: 0,
         tip: tip,
         discount: 0,
         total: tip,
-        bonusEligible: false,
-        bonusThreshold: BONUS_THRESHOLD,
-        amountToBonus: BONUS_THRESHOLD,
       };
     }
 
     const subtotal = cart.items.reduce((sum, item) => sum + item.itemTotal, 0);
-    const tax = Math.round(subtotal * TAX_RATE * 100) / 100;
 
+    // Get delivery fee from restaurant if available
     let deliveryFee = DEFAULT_DELIVERY_FEE;
-    if (addressId) {
-      deliveryFee = DEFAULT_DELIVERY_FEE;
+    if (cart.restaurantId) {
+      const restaurant = await Restaurant.findById(cart.restaurantId);
+      if (restaurant) {
+        deliveryFee = restaurant.deliveryFee;
+      }
     }
 
     const discount = cart.promoDiscount || 0;
-
-    const total = Math.max(0, subtotal + tax + deliveryFee + tip - discount);
-    const bonusEligible = subtotal >= BONUS_THRESHOLD;
-    const amountToBonus = bonusEligible ? 0 : Math.max(0, BONUS_THRESHOLD - subtotal);
+    const total = Math.max(0, subtotal + deliveryFee + tip - discount);
 
     return {
       subtotal: Math.round(subtotal * 100) / 100,
-      tax,
       deliveryFee,
       tip,
       discount,
       total: Math.round(total * 100) / 100,
-      bonusEligible,
-      bonusThreshold: BONUS_THRESHOLD,
-      amountToBonus: Math.round(amountToBonus * 100) / 100,
-    };
-  }
-
-  static async getBonusEligibility(
-    userId: string
-  ): Promise<{ eligible: boolean; threshold: number; currentTotal: number; amountNeeded: number }> {
-    const cart = await Cart.findOne({ userId });
-    const currentTotal = cart ? cart.items.reduce((sum, item) => sum + item.itemTotal, 0) : 0;
-    const eligible = currentTotal >= BONUS_THRESHOLD;
-    const amountNeeded = eligible ? 0 : Math.max(0, BONUS_THRESHOLD - currentTotal);
-
-    return {
-      eligible,
-      threshold: BONUS_THRESHOLD,
-      currentTotal: Math.round(currentTotal * 100) / 100,
-      amountNeeded: Math.round(amountNeeded * 100) / 100,
     };
   }
 

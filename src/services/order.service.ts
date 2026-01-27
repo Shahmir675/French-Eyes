@@ -1,22 +1,19 @@
 import { Types } from "mongoose";
-import Stripe from "stripe";
 import { Order } from "../models/order.model.js";
 import { Cart } from "../models/cart.model.js";
 import { Address } from "../models/address.model.js";
 import { Product } from "../models/product.model.js";
-import { Payment } from "../models/payment.model.js";
+import { Restaurant } from "../models/restaurant.model.js";
 import { AppError } from "../utils/errors.js";
-import { config } from "../config/index.js";
-
-const stripe = new Stripe(config.stripe.secretKey);
 import type {
   IOrder,
+  ICartItem,
   OrderItem,
   OrderAddress,
-  LocalizedString,
-  SelectedOption,
-  SelectedExtra,
+  SelectedAddOn,
   OrderStatus,
+  StatusTimelineEntry,
+  DriverDetails,
 } from "../types/index.js";
 import type {
   CreateOrderInput,
@@ -25,50 +22,49 @@ import type {
   ReviewOrderInput,
 } from "../validators/order.validator.js";
 
-const TAX_RATE = 0.1;
 const DEFAULT_DELIVERY_FEE = 3.0;
 const CANCELLABLE_STATUSES: OrderStatus[] = ["pending", "confirmed"];
+const POINTS_PER_DOLLAR = 1;
 
 interface OrderItemResponse {
   productId: string;
-  productName: LocalizedString;
+  name: string;
+  imageUrl: string;
   quantity: number;
   unitPrice: number;
-  selectedOptions: SelectedOption[];
-  selectedExtras: SelectedExtra[];
-  notes?: string;
+  selectedAddOns: SelectedAddOn[];
+  specialInstructions?: string;
   itemTotal: number;
 }
 
 interface OrderResponse {
   id: string;
   orderNumber: string;
+  restaurantId: string;
+  restaurantName: string;
   type: string;
   status: string;
   items: OrderItemResponse[];
   subtotal: number;
-  tax: number;
   deliveryFee: number;
   tip: number;
   discount: number;
   total: number;
   address?: OrderAddress;
-  pickupTime?: string;
-  prepTime?: number;
   paymentMethod: string;
   paymentStatus: string;
-  clientSecret?: string;
+  loyaltyPointsUsed: number;
+  loyaltyPointsEarned: number;
+  promoCode?: string;
+  statusTimeline: Array<{ status: string; timestamp: string }>;
+  estimatedDeliveryTime?: string;
+  driverDetails?: DriverDetails;
   notes?: string;
   review?: {
     rating: number;
     comment?: string;
     createdAt: string;
   };
-  statusHistory: Array<{
-    status: string;
-    timestamp: string;
-    note?: string;
-  }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -87,16 +83,9 @@ interface TrackingResponse {
   orderId: string;
   orderNumber: string;
   status: string;
-  statusHistory: Array<{
-    status: string;
-    timestamp: string;
-    note?: string;
-  }>;
-  estimatedDelivery?: string;
-  driverLocation?: {
-    lat: number;
-    lng: number;
-  };
+  statusTimeline: Array<{ status: string; timestamp: string }>;
+  estimatedDeliveryTime?: string;
+  driverDetails?: DriverDetails;
 }
 
 export class OrderService {
@@ -109,16 +98,16 @@ export class OrderService {
   private static mapOrderItem(item: OrderItem): OrderItemResponse {
     const response: OrderItemResponse = {
       productId: item.productId.toString(),
-      productName: item.productName,
+      name: item.name,
+      imageUrl: item.imageUrl,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
-      selectedOptions: item.selectedOptions,
-      selectedExtras: item.selectedExtras,
+      selectedAddOns: item.selectedAddOns,
       itemTotal: item.itemTotal,
     };
 
-    if (item.notes) {
-      response.notes = item.notes;
+    if (item.specialInstructions) {
+      response.specialInstructions = item.specialInstructions;
     }
 
     return response;
@@ -128,27 +117,24 @@ export class OrderService {
     const response: OrderResponse = {
       id: order._id.toString(),
       orderNumber: order.orderNumber,
+      restaurantId: order.restaurantId.toString(),
+      restaurantName: order.restaurantName,
       type: order.type,
       status: order.status,
       items: order.items.map(this.mapOrderItem),
       subtotal: order.subtotal,
-      tax: order.tax,
       deliveryFee: order.deliveryFee,
       tip: order.tip,
       discount: order.discount,
       total: order.total,
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
-      statusHistory: order.statusHistory.map((h) => {
-        const entry: { status: string; timestamp: string; note?: string } = {
-          status: h.status,
-          timestamp: h.timestamp.toISOString(),
-        };
-        if (h.note) {
-          entry.note = h.note;
-        }
-        return entry;
-      }),
+      loyaltyPointsUsed: order.loyaltyPointsUsed,
+      loyaltyPointsEarned: order.loyaltyPointsEarned,
+      statusTimeline: order.statusTimeline.map((s) => ({
+        status: s.status,
+        timestamp: s.timestamp.toISOString(),
+      })),
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
     };
@@ -157,12 +143,16 @@ export class OrderService {
       response.address = order.address;
     }
 
-    if (order.pickupTime) {
-      response.pickupTime = order.pickupTime.toISOString();
+    if (order.promoCode) {
+      response.promoCode = order.promoCode;
     }
 
-    if (order.prepTime !== undefined) {
-      response.prepTime = order.prepTime;
+    if (order.estimatedDeliveryTime) {
+      response.estimatedDeliveryTime = order.estimatedDeliveryTime.toISOString();
+    }
+
+    if (order.driverDetails) {
+      response.driverDetails = order.driverDetails;
     }
 
     if (order.notes) {
@@ -188,6 +178,15 @@ export class OrderService {
       throw AppError.cartEmpty();
     }
 
+    if (!cart.restaurantId) {
+      throw AppError.validation("Cart must have a restaurant");
+    }
+
+    const restaurant = await Restaurant.findById(cart.restaurantId);
+    if (!restaurant) {
+      throw AppError.validation("Restaurant not found");
+    }
+
     let orderAddress: OrderAddress | undefined;
     if (input.type === "delivery" && input.addressId) {
       const address = await Address.findOne({
@@ -199,10 +198,11 @@ export class OrderService {
       }
 
       orderAddress = {
+        title: address.title,
         street: address.street,
-        city: address.city,
+        state: address.state,
         zipCode: address.zipCode,
-        country: address.country,
+        completeAddress: address.completeAddress,
       };
 
       if (address.coordinates?.lat && address.coordinates?.lng) {
@@ -211,24 +211,20 @@ export class OrderService {
           lng: address.coordinates.lng,
         };
       }
-
-      if (address.deliveryInstructions) {
-        orderAddress.deliveryInstructions = address.deliveryInstructions;
-      }
     }
 
     const orderItems: OrderItem[] = cart.items.map((item) => {
       const orderItem: OrderItem = {
         productId: item.productId,
-        productName: item.productName,
+        name: item.name,
+        imageUrl: item.imageUrl,
         quantity: item.quantity,
-        unitPrice: item.productPrice,
-        selectedOptions: item.selectedOptions,
-        selectedExtras: item.selectedExtras,
+        unitPrice: item.price,
+        selectedAddOns: item.selectedAddOns,
         itemTotal: item.itemTotal,
       };
-      if (item.notes) {
-        orderItem.notes = item.notes;
+      if (item.specialInstructions) {
+        orderItem.specialInstructions = item.specialInstructions;
       }
       return orderItem;
     });
@@ -236,47 +232,42 @@ export class OrderService {
     const subtotal = Math.round(
       orderItems.reduce((sum, item) => sum + item.itemTotal, 0) * 100
     ) / 100;
-    const tax = Math.round(subtotal * TAX_RATE * 100) / 100;
-    const deliveryFee = input.type === "delivery" ? DEFAULT_DELIVERY_FEE : 0;
+    const deliveryFee = input.type === "delivery" ? restaurant.deliveryFee : 0;
     const discount = cart.promoDiscount || 0;
     const tip = input.tip || 0;
+    const loyaltyPointsToRedeem = input.loyaltyPointsToRedeem || 0;
     const total = Math.round(
-      Math.max(0, subtotal + tax + deliveryFee + tip - discount) * 100
+      Math.max(0, subtotal + deliveryFee + tip - discount - loyaltyPointsToRedeem) * 100
     ) / 100;
 
-    const paymentStatus = "pending";
+    const loyaltyPointsEarned = Math.floor(total * POINTS_PER_DOLLAR);
 
     const orderData: Partial<IOrder> = {
       orderNumber: this.generateOrderNumber(),
       userId: new Types.ObjectId(userId),
+      restaurantId: cart.restaurantId,
+      restaurantName: restaurant.name,
       type: input.type,
       status: "pending",
       items: orderItems,
       subtotal,
-      tax,
       deliveryFee,
       tip,
       discount,
       total,
       paymentMethod: input.paymentMethod,
-      paymentStatus,
-      statusHistory: [{ status: "pending", timestamp: new Date() }],
+      paymentStatus: "pending",
+      loyaltyPointsUsed: loyaltyPointsToRedeem,
+      loyaltyPointsEarned,
+      statusTimeline: [{ status: "pending", timestamp: new Date() }],
     };
 
     if (orderAddress) {
       orderData.address = orderAddress;
     }
 
-    if (input.pickupTime) {
-      orderData.pickupTime = new Date(input.pickupTime);
-    }
-
-    if (input.paymentIntentId) {
-      orderData.paymentIntentId = input.paymentIntentId;
-    }
-
-    if (input.selectedBonusId) {
-      orderData.bonusId = new Types.ObjectId(input.selectedBonusId);
+    if (cart.promoCode) {
+      orderData.promoCode = cart.promoCode;
     }
 
     if (input.notes) {
@@ -285,56 +276,16 @@ export class OrderService {
 
     const order = await Order.create(orderData);
 
+    // Clear cart
     await Cart.findOneAndUpdate(
       { userId },
       {
         $set: { items: [] },
-        $unset: { promoCode: 1, promoDiscount: 1 },
+        $unset: { promoCode: 1, promoDiscount: 1, restaurantId: 1 },
       }
     );
 
-    let clientSecret: string | undefined;
-
-    if (input.paymentMethod === "stripe") {
-      const amountInCents = Math.round(total * 100);
-
-      if (amountInCents >= 50) {
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: amountInCents,
-          currency: "eur",
-          metadata: {
-            orderId: order._id.toString(),
-            userId: userId,
-            orderNumber: order.orderNumber,
-          },
-          automatic_payment_methods: {
-            enabled: true,
-          },
-        });
-
-        await Payment.create({
-          orderId: order._id,
-          userId: new Types.ObjectId(userId),
-          provider: "stripe",
-          providerPaymentId: paymentIntent.id,
-          amount: total,
-          currency: "EUR",
-          status: "pending",
-          clientSecret: paymentIntent.client_secret,
-        });
-
-        order.paymentIntentId = paymentIntent.id;
-        await order.save();
-
-        clientSecret = paymentIntent.client_secret || undefined;
-      }
-    }
-
-    const response = this.mapOrder(order);
-    if (clientSecret) {
-      response.clientSecret = clientSecret;
-    }
-    return response;
+    return this.mapOrder(order);
   }
 
   static async getOrders(userId: string, query: GetOrdersQuery): Promise<OrderListResponse> {
@@ -392,22 +343,18 @@ export class OrderService {
       orderId: order._id.toString(),
       orderNumber: order.orderNumber,
       status: order.status,
-      statusHistory: order.statusHistory.map((h) => {
-        const entry: { status: string; timestamp: string; note?: string } = {
-          status: h.status,
-          timestamp: h.timestamp.toISOString(),
-        };
-        if (h.note) {
-          entry.note = h.note;
-        }
-        return entry;
-      }),
+      statusTimeline: order.statusTimeline.map((s) => ({
+        status: s.status,
+        timestamp: s.timestamp.toISOString(),
+      })),
     };
 
-    if (order.prepTime) {
-      const orderCreatedAt = order.createdAt.getTime();
-      const estimatedDeliveryTime = orderCreatedAt + order.prepTime * 60 * 1000;
-      response.estimatedDelivery = new Date(estimatedDeliveryTime).toISOString();
+    if (order.estimatedDeliveryTime) {
+      response.estimatedDeliveryTime = order.estimatedDeliveryTime.toISOString();
+    }
+
+    if (order.driverDetails) {
+      response.driverDetails = order.driverDetails;
     }
 
     return response;
@@ -431,17 +378,13 @@ export class OrderService {
       throw AppError.orderCannotCancel();
     }
 
-    const historyEntry: { status: OrderStatus; timestamp: Date; note?: string } = {
+    const timelineEntry: StatusTimelineEntry = {
       status: "cancelled",
       timestamp: new Date(),
     };
 
-    if (input.reason) {
-      historyEntry.note = input.reason;
-    }
-
     order.status = "cancelled";
-    order.statusHistory.push(historyEntry);
+    order.statusTimeline.push(timelineEntry);
 
     if (order.paymentStatus === "paid") {
       order.paymentStatus = "refunded";
@@ -466,7 +409,7 @@ export class OrderService {
       throw AppError.orderNotFound();
     }
 
-    const completedStatuses: OrderStatus[] = ["completed", "delivered", "picked_up"];
+    const completedStatuses: OrderStatus[] = ["delivered", "picked_up"];
     if (!completedStatuses.includes(order.status)) {
       throw AppError.orderNotCompleted();
     }
@@ -514,7 +457,7 @@ export class OrderService {
       if (availableProductIds.has(item.productId.toString())) {
         itemsToAdd.push(item);
       } else {
-        unavailableItems.push(item.productName.en);
+        unavailableItems.push(item.name);
       }
     }
 
@@ -524,7 +467,13 @@ export class OrderService {
 
     let cart = await Cart.findOne({ userId });
     if (!cart) {
-      cart = new Cart({ userId, items: [] });
+      cart = new Cart({ userId, restaurantId: order.restaurantId, items: [] });
+    } else if (cart.restaurantId?.toString() !== order.restaurantId.toString()) {
+      // Clear cart if different restaurant
+      cart.items = [];
+      cart.restaurantId = order.restaurantId;
+      delete (cart as unknown as Record<string, unknown>)["promoCode"];
+      delete (cart as unknown as Record<string, unknown>)["promoDiscount"];
     }
 
     for (const item of itemsToAdd) {
@@ -533,80 +482,48 @@ export class OrderService {
       );
 
       if (product) {
-        const validatedOptions: SelectedOption[] = [];
-        for (const oldOption of item.selectedOptions) {
-          const productOption = product.options.find((o) => o.name === oldOption.name);
-          if (productOption) {
-            const choice = productOption.choices.find((c) => c.label === oldOption.choice);
-            if (choice) {
-              validatedOptions.push({
-                name: oldOption.name,
-                choice: oldOption.choice,
-                price: choice.priceModifier,
-              });
-            }
-          }
-        }
-
-        for (const productOption of product.options) {
-          if (productOption.required) {
-            const hasSelection = validatedOptions.some((o) => o.name === productOption.name);
-            if (!hasSelection && productOption.choices.length > 0) {
-              const firstChoice = productOption.choices[0];
-              if (firstChoice) {
-                validatedOptions.push({
-                  name: productOption.name,
-                  choice: firstChoice.label,
-                  price: firstChoice.priceModifier,
-                });
-              }
-            }
-          }
-        }
-
-        const validatedExtras: SelectedExtra[] = [];
-        for (const oldExtra of item.selectedExtras) {
-          const productExtra = product.extras.find((e) => e.name === oldExtra.name);
-          if (productExtra) {
-            validatedExtras.push({
-              name: productExtra.name,
-              price: productExtra.price,
+        const validatedAddOns: SelectedAddOn[] = [];
+        for (const oldAddOn of item.selectedAddOns) {
+          const productAddOn = product.addOns.find((a) => a.name === oldAddOn.name);
+          if (productAddOn) {
+            validatedAddOns.push({
+              name: productAddOn.name,
+              price: productAddOn.price,
             });
           }
         }
 
-        const optionsTotal = validatedOptions.reduce((sum, o) => sum + o.price, 0);
-        const extrasTotal = validatedExtras.reduce((sum, e) => sum + e.price, 0);
+        const addOnsTotal = validatedAddOns.reduce((sum, a) => sum + a.price, 0);
         const itemTotal = Math.round(
-          (product.price + optionsTotal + extrasTotal) * item.quantity * 100
+          (product.price + addOnsTotal) * item.quantity * 100
         ) / 100;
 
         const cartItem: {
           _id: Types.ObjectId;
           productId: Types.ObjectId;
-          productName: LocalizedString;
-          productPrice: number;
+          name: string;
+          imageUrl: string;
+          price: number;
           quantity: number;
-          selectedOptions: SelectedOption[];
-          selectedExtras: SelectedExtra[];
-          notes?: string;
+          selectedAddOns: SelectedAddOn[];
+          specialInstructions?: string;
           itemTotal: number;
         } = {
           _id: new Types.ObjectId(),
           productId: item.productId,
-          productName: product.name,
-          productPrice: product.price,
+          name: product.name,
+          imageUrl: product.imageUrl,
+          price: product.price,
           quantity: item.quantity,
-          selectedOptions: validatedOptions,
-          selectedExtras: validatedExtras,
+          selectedAddOns: validatedAddOns,
           itemTotal,
         };
 
-        if (item.notes) {
-          cartItem.notes = item.notes;
+        if (item.specialInstructions) {
+          cartItem.specialInstructions = item.specialInstructions;
         }
 
-        cart.items.push(cartItem);
+        cart.items.push(cartItem as ICartItem);
       }
     }
 

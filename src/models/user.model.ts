@@ -16,19 +16,22 @@ const userSchema = new Schema<IUser>(
         return this.authProvider === "email";
       },
     },
-    name: {
+    fullName: {
       type: String,
       required: true,
       trim: true,
     },
-    phone: {
+    phoneNumber: {
       type: String,
       required: true,
       trim: true,
+    },
+    profilePicture: {
+      type: String,
     },
     authProvider: {
       type: String,
-      enum: ["email", "google", "facebook"],
+      enum: ["email", "google", "apple"],
       default: "email",
     },
     providerId: {
@@ -41,12 +44,20 @@ const userSchema = new Schema<IUser>(
     language: {
       type: String,
       enum: ["de", "en", "fr"],
-      default: "de",
+      default: "en",
     },
     status: {
       type: String,
       enum: ["active", "inactive"],
       default: "active",
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    notificationsEnabled: {
+      type: Boolean,
+      default: true,
     },
     gdprConsent: {
       type: Boolean,

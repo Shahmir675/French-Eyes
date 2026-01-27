@@ -9,21 +9,17 @@ export const createOrderSchema = z
       .string()
       .regex(objectIdRegex, "Invalid address ID")
       .optional(),
-    pickupTime: z
-      .string()
-      .datetime({ message: "Invalid pickup time format" })
-      .optional(),
-    paymentMethod: z.enum(["cash", "stripe", "paypal"]),
-    paymentIntentId: z.string().min(1).optional(),
-    tip: z.number().min(0, "Tip cannot be negative").default(0),
+    paymentMethod: z.enum(["cash", "card", "apple_pay"]),
+    tip: z.number().refine(
+      (val) => val === 0 || [5, 10, 15, 20, 50].includes(val),
+      "Tip must be 0, 5, 10, 15, 20, or 50"
+    ).default(0),
+    promoCode: z.string().trim().toUpperCase().optional(),
+    loyaltyPointsToRedeem: z.number().int().min(0).optional().default(0),
     notes: z
       .string()
       .trim()
       .max(500, "Notes cannot exceed 500 characters")
-      .optional(),
-    selectedBonusId: z
-      .string()
-      .regex(objectIdRegex, "Invalid bonus ID")
       .optional(),
   })
   .refine(
@@ -48,13 +44,7 @@ export const getOrdersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
   status: z
     .enum([
-      "pending",
-      "confirmed",
-      "preparing",
-      "ready",
-      "picked_up",
-      "out_for_delivery",
-      "delivered",
+      "active",
       "completed",
       "cancelled",
     ])

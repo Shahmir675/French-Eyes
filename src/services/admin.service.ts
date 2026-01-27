@@ -34,7 +34,7 @@ import type {
   ListReviewsQuery,
   StatsQuery,
 } from "../validators/admin.validator.js";
-import type { IUser, IDriver, IOrder, IProduct, ICategory } from "../types/index.js";
+import type { IUser, IDriver, IOrder, IProduct, ICategory, OrderStatus } from "../types/index.js";
 
 const stripe = new Stripe(config.stripe.secretKey);
 
@@ -287,13 +287,11 @@ export class AdminService {
     const order = await Order.findById(orderId);
     if (!order) throw AppError.orderNotFound();
 
-    order.status = input.status;
-    const historyEntry: { status: typeof input.status; timestamp: Date; note?: string } = {
-      status: input.status,
+    order.status = input.status as OrderStatus;
+    order.statusTimeline.push({
+      status: input.status as OrderStatus,
       timestamp: new Date(),
-    };
-    if (input.note) historyEntry.note = input.note;
-    order.statusHistory.push(historyEntry);
+    });
 
     await order.save();
     return order.toObject();

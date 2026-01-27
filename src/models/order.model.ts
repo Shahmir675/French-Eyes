@@ -1,25 +1,7 @@
 import mongoose, { Schema, Model } from "mongoose";
 import type { IOrder } from "../types/index.js";
 
-const localizedStringSchema = new Schema(
-  {
-    en: { type: String, required: true },
-    de: { type: String, required: true },
-    fr: { type: String, required: true },
-  },
-  { _id: false }
-);
-
-const selectedOptionSchema = new Schema(
-  {
-    name: { type: String, required: true },
-    choice: { type: String, required: true },
-    price: { type: Number, required: true },
-  },
-  { _id: false }
-);
-
-const selectedExtraSchema = new Schema(
+const selectedAddOnSchema = new Schema(
   {
     name: { type: String, required: true },
     price: { type: Number, required: true },
@@ -34,8 +16,12 @@ const orderItemSchema = new Schema(
       ref: "Product",
       required: true,
     },
-    productName: {
-      type: localizedStringSchema,
+    name: {
+      type: String,
+      required: true,
+    },
+    imageUrl: {
+      type: String,
       required: true,
     },
     quantity: {
@@ -48,15 +34,11 @@ const orderItemSchema = new Schema(
       required: true,
       min: 0,
     },
-    selectedOptions: {
-      type: [selectedOptionSchema],
+    selectedAddOns: {
+      type: [selectedAddOnSchema],
       default: [],
     },
-    selectedExtras: {
-      type: [selectedExtraSchema],
-      default: [],
-    },
-    notes: {
+    specialInstructions: {
       type: String,
       trim: true,
     },
@@ -71,20 +53,20 @@ const orderItemSchema = new Schema(
 
 const orderAddressSchema = new Schema(
   {
+    title: { type: String, required: true },
     street: { type: String, required: true },
-    city: { type: String, required: true },
+    state: { type: String, required: true },
     zipCode: { type: String, required: true },
-    country: { type: String, required: true },
+    completeAddress: { type: String, required: true },
     coordinates: {
       lat: { type: Number },
       lng: { type: Number },
     },
-    deliveryInstructions: { type: String },
   },
   { _id: false }
 );
 
-const statusHistorySchema = new Schema(
+const statusTimelineSchema = new Schema(
   {
     status: {
       type: String,
@@ -96,7 +78,6 @@ const statusHistorySchema = new Schema(
         "picked_up",
         "out_for_delivery",
         "delivered",
-        "completed",
         "cancelled",
       ],
       required: true,
@@ -106,9 +87,17 @@ const statusHistorySchema = new Schema(
       required: true,
       default: Date.now,
     },
-    note: {
-      type: String,
-      trim: true,
+  },
+  { _id: false }
+);
+
+const driverDetailsSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    phone: { type: String, required: true },
+    currentLocation: {
+      lat: { type: Number },
+      lng: { type: Number },
     },
   },
   { _id: false }
@@ -162,6 +151,15 @@ const orderSchema = new Schema<IOrder>(
       ref: "User",
       required: true,
     },
+    restaurantId: {
+      type: Schema.Types.ObjectId,
+      ref: "Restaurant",
+      required: true,
+    },
+    restaurantName: {
+      type: String,
+      required: true,
+    },
     driverId: {
       type: Schema.Types.ObjectId,
       ref: "Driver",
@@ -181,7 +179,6 @@ const orderSchema = new Schema<IOrder>(
         "picked_up",
         "out_for_delivery",
         "delivered",
-        "completed",
         "cancelled",
       ],
       default: "pending",
@@ -195,9 +192,9 @@ const orderSchema = new Schema<IOrder>(
       required: true,
       min: 0,
     },
-    tax: {
+    discount: {
       type: Number,
-      required: true,
+      default: 0,
       min: 0,
     },
     deliveryFee: {
@@ -210,31 +207,15 @@ const orderSchema = new Schema<IOrder>(
       default: 0,
       min: 0,
     },
-    discount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
     total: {
       type: Number,
       required: true,
       min: 0,
     },
     address: orderAddressSchema,
-    zoneId: {
-      type: Schema.Types.ObjectId,
-      ref: "DeliveryZone",
-    },
-    pickupTime: {
-      type: Date,
-    },
-    prepTime: {
-      type: Number,
-      min: 0,
-    },
     paymentMethod: {
       type: String,
-      enum: ["cash", "stripe", "paypal"],
+      enum: ["cash", "card", "apple_pay"],
       required: true,
     },
     paymentStatus: {
@@ -242,20 +223,28 @@ const orderSchema = new Schema<IOrder>(
       enum: ["pending", "paid", "refunded"],
       default: "pending",
     },
-    paymentIntentId: {
+    loyaltyPointsUsed: {
+      type: Number,
+      default: 0,
+    },
+    loyaltyPointsEarned: {
+      type: Number,
+      default: 0,
+    },
+    promoCode: {
       type: String,
     },
-    bonusId: {
-      type: Schema.Types.ObjectId,
-      ref: "BonusItem",
+    statusTimeline: {
+      type: [statusTimelineSchema],
+      default: [],
     },
+    estimatedDeliveryTime: {
+      type: Date,
+    },
+    driverDetails: driverDetailsSchema,
     notes: {
       type: String,
       trim: true,
-    },
-    statusHistory: {
-      type: [statusHistorySchema],
-      default: [],
     },
     review: reviewSchema,
   },
@@ -265,6 +254,7 @@ const orderSchema = new Schema<IOrder>(
 );
 
 orderSchema.index({ userId: 1, createdAt: -1 });
+orderSchema.index({ restaurantId: 1 });
 orderSchema.index({ status: 1 });
 orderSchema.index({ driverId: 1, status: 1 });
 orderSchema.index({ createdAt: -1 });

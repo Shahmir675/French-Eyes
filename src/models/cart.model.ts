@@ -1,25 +1,7 @@
 import mongoose, { Schema, Model } from "mongoose";
 import type { ICart } from "../types/index.js";
 
-const localizedStringSchema = new Schema(
-  {
-    en: { type: String, required: true, trim: true },
-    de: { type: String, required: true, trim: true },
-    fr: { type: String, required: true, trim: true },
-  },
-  { _id: false }
-);
-
-const selectedOptionSchema = new Schema(
-  {
-    name: { type: String, required: true, trim: true },
-    choice: { type: String, required: true, trim: true },
-    price: { type: Number, required: true, default: 0 },
-  },
-  { _id: false }
-);
-
-const selectedExtraSchema = new Schema(
+const selectedAddOnSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
     price: { type: Number, required: true },
@@ -34,11 +16,15 @@ const cartItemSchema = new Schema(
       ref: "Product",
       required: true,
     },
-    productName: {
-      type: localizedStringSchema,
+    name: {
+      type: String,
       required: true,
     },
-    productPrice: {
+    imageUrl: {
+      type: String,
+      required: true,
+    },
+    price: {
       type: Number,
       required: true,
       min: 0,
@@ -49,15 +35,11 @@ const cartItemSchema = new Schema(
       min: 1,
       default: 1,
     },
-    selectedOptions: {
-      type: [selectedOptionSchema],
+    selectedAddOns: {
+      type: [selectedAddOnSchema],
       default: [],
     },
-    selectedExtras: {
-      type: [selectedExtraSchema],
-      default: [],
-    },
-    notes: {
+    specialInstructions: {
       type: String,
       trim: true,
     },
@@ -77,6 +59,10 @@ const cartSchema = new Schema<ICart>(
       ref: "User",
       required: true,
       unique: true,
+    },
+    restaurantId: {
+      type: Schema.Types.ObjectId,
+      ref: "Restaurant",
     },
     items: {
       type: [cartItemSchema],

@@ -1,24 +1,21 @@
 import mongoose, { Schema, Model } from "mongoose";
 import type { ICategory } from "../types/index.js";
 
-const localizedStringSchema = new Schema(
-  {
-    en: { type: String, required: true, trim: true },
-    de: { type: String, required: true, trim: true },
-    fr: { type: String, required: true, trim: true },
-  },
-  { _id: false }
-);
-
 const categorySchema = new Schema<ICategory>(
   {
-    name: {
-      type: localizedStringSchema,
+    restaurantId: {
+      type: Schema.Types.ObjectId,
+      ref: "Restaurant",
       required: true,
     },
-    description: {
-      type: localizedStringSchema,
+    name: {
+      type: String,
       required: true,
+      trim: true,
+    },
+    description: {
+      type: String,
+      trim: true,
     },
     image: {
       type: String,
@@ -38,7 +35,9 @@ const categorySchema = new Schema<ICategory>(
   }
 );
 
+categorySchema.index({ restaurantId: 1 });
 categorySchema.index({ sortOrder: 1 });
 categorySchema.index({ active: 1 });
+categorySchema.index({ restaurantId: 1, active: 1, sortOrder: 1 });
 
 export const Category: Model<ICategory> = mongoose.model<ICategory>("Category", categorySchema);

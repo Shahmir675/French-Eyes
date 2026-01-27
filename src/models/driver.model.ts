@@ -24,6 +24,9 @@ const driverSchema = new Schema<IDriver>(
       required: true,
       trim: true,
     },
+    profilePicture: {
+      type: String,
+    },
     assignedZones: [
       {
         type: Schema.Types.ObjectId,

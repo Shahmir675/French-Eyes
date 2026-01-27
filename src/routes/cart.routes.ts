@@ -43,8 +43,6 @@ router.post(
   CartController.calculate
 );
 
-router.get("/bonus-eligibility", CartController.getBonusEligibility);
-
 router.post(
   "/apply-promo",
   validate(applyPromoSchema),
